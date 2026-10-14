@@ -3,7 +3,7 @@
 // ícones); as marcações da fiscalização ficam no banco do aparelho e não
 // passam por aqui. A versão muda a cada publicação: o aparelho baixa a nova
 // em segundo plano e ela vale na abertura seguinte.
-var VERSAO = "2026.10.14-1621";
+var VERSAO = "2026.10.14-1852";
 var CACHE = "prancheta-app-" + VERSAO;
 var ARQUIVOS = ["./", "index.html", "app.css", "app.js", "manifest.webmanifest", "modelo.html", "ementario.json",
   "icones/icone-192.png", "icones/icone-512.png", "icones/icone-maskable-512.png"];

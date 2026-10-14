@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="prancheta-codigo" content="2026-10-14T19:16:46Z">
+<meta name="prancheta-codigo" content="2026-10-14T21:50:11Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Prancheta de Inspeção</title>
 <style>
@@ -128,6 +128,8 @@ dialog .corpo{padding:12px}
 .ind-mais{border:1px solid var(--irregular);background:var(--irregular);color:#fff}
 .ind-tirar{border:1px solid var(--linha);background:#fff;color:var(--suave)}
 .ind-fotos{flex:none;align-self:center;font-size:13px;color:var(--suave);white-space:nowrap}
+.copiar-fotos{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 0;font-size:14px;color:var(--suave)}
+.copiar-fotos select,.visor-copiar{min-height:40px;border:1px solid var(--linha);border-radius:8px;background:#fff;color:var(--texto);font:inherit;font-size:14px;padding:4px 6px;flex:1;min-width:0;width:100%}
 .bandeja-todas{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 6px;font-size:14px;color:var(--suave)}
 .bandeja{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:8px}
 .foto-b{margin:0;background:var(--cartao);border:1px solid var(--linha);border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:5px}
@@ -154,6 +156,8 @@ details.config summary{color:var(--suave);cursor:pointer}
 <dialog id="visor"><img id="visor-img" alt="Foto ampliada"><div class="corpo">
   <label class="rot" for="visor-legenda">Legenda</label>
   <input type="text" id="visor-legenda">
+  <label class="rot" for="visor-copiar">Copiar esta foto para</label>
+  <select id="visor-copiar" class="visor-copiar"></select>
   <div class="acoes"><button class="btn cheio" type="button" data-acao="visor-ok">OK</button>
   <button class="btn perigo" type="button" data-acao="visor-apagar">Apagar foto</button></div>
 </div></dialog>
@@ -313,14 +317,14 @@ function importarParaBandeja() {
   };
   inp.click();
 }
-function opcoesDestino() {
+function opcoesDestino(excluir) {
   var o = "", inds = indiciosVivos();
   if (inds.length) o += '<optgroup label="Indícios">' + inds.slice().reverse().map(function (x) {
     return '<option value="i:' + esc(x.id) + '">' + esc(curto(x.texto)) + "</option>"; }).join("") + "</optgroup>";
-  var cs = vivos().filter(function (i) { return i.origem !== "os"; }).reverse();
+  var cs = vivos().filter(function (i) { return i.origem !== "os" && i.id !== excluir; }).reverse();
   if (cs.length) o += '<optgroup label="Constatações">' + cs.map(function (i) {
     return '<option value="c:' + esc(i.id) + '">' + esc(curto(i.relato || "(sem relato)")) + "</option>"; }).join("") + "</optgroup>";
-  var es = vivos().filter(function (i) { return i.origem === "os"; });
+  var es = vivos().filter(function (i) { return i.origem === "os" && i.id !== excluir; });
   if (es.length) o += '<optgroup label="Ementas da OS">' + es.map(function (i) {
     return '<option value="c:' + esc(i.id) + '">' + esc((i.codigo ? i.codigo + " · " : "") + curto(i.descricao || i.relato || "")) + "</option>"; }).join("") + "</optgroup>";
   return o;
@@ -345,6 +349,33 @@ function mandarFoto(fid, destino, emLote) {
   mudou(null);
   if (!emLote) render();
   return true;
+}
+// Copiar fotos para outro lugar (pedido da AFT, 14/10/2026: "preciso inserir as
+// fotos da batedeira em mais de uma ementa"). A foto continua onde estava e
+// entra também no destino (ementa da OS, constatação ou indício). Foto que já
+// está no destino não entra de novo.
+function copiarFotos(fotos, destino) {
+  var alvoIt = destino.charAt(0) === "c" ? item(destino.slice(2)) : null;
+  var alvoInd = destino.charAt(0) === "i" ? indicio(destino.slice(2)) : null;
+  var alvo = alvoIt || alvoInd; if (!alvo) return 0;
+  alvo.fotos = alvo.fotos || [];
+  var ja = {}, n = 0;
+  alvo.fotos.forEach(function (f) { if (!f.apagado) ja[f.copia_de || f.id] = 1; });
+  fotos.forEach(function (f) {
+    var orig = f.copia_de || f.id;
+    if (ja[orig] || !f.data) return;
+    ja[orig] = 1;
+    alvo.fotos.push({id: "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), copia_de: orig,
+      data: f.data, quando: f.quando, origem_hora: f.origem_hora, legenda: f.legenda || ""});
+    n++;
+  });
+  if (alvoIt) mudou(alvoIt); else { alvoInd.atualizado_em = agoraIso(); mudou(null); }
+  return n;
+}
+function nomeDestino(destino) {
+  var it = destino.charAt(0) === "c" ? item(destino.slice(2)) : null;
+  if (it) return it.origem === "os" ? "a ementa " + (it.codigo || "") : "a constatação";
+  return "o indício";
 }
 var rascunhoIndicio = "";
 function anotarIndicio() {
@@ -707,6 +738,8 @@ function cartao(it) {
     return '<div class="doc" data-doc="' + esc(d.id) + '"><button class="nome" type="button" data-acao="doc-abrir">📄 ' + esc(d.nome)
       + '</button><span class="tam">' + esc(tamanhoTxt(d.tamanho)) + '</span><button class="tirar" type="button" data-acao="doc-tirar" aria-label="Remover documento">×</button></div>'; }).join("") + "</div>";
   var fotosVivas = it.fotos.filter(function (f) { return !f.apagado; });
+  if (fotosVivas.length) h += '<label class="copiar-fotos">📋 Copiar ' + (fotosVivas.length > 1 ? "as " + fotosVivas.length + " fotos" : "a foto")
+    + ' deste cartão para <select data-campo="copiar-fotos"><option value="">escolha…</option>' + opcoesDestino(it.id) + "</select></label>";
   if (fotosVivas.length) h += '<div class="fotos">' + fotosVivas.map(function (f) {
     return '<figure data-foto="' + esc(f.id) + '"><img src="' + f.data + '" alt="Foto carimbada" data-acao="ver-foto"><figcaption>' + esc(f.legenda || f.quando) + "</figcaption></figure>"; }).join("") + "</div>";
   return h + "</div>";
@@ -750,6 +783,18 @@ function render() {
       + '<button type="button" class="ind-mais" data-acao="indicio-virar" title="Tornar irregularidade definitiva" aria-label="Tornar irregularidade definitiva">＋</button>'
       + '<button type="button" class="ind-tirar" data-acao="indicio-tirar" title="Descartar o indício" aria-label="Descartar o indício">×</button></li>';
   }).join("") + "</ul>" : '<p class="vazio">Nenhum indício anotado.</p>';
+  h += "<h2>Ementas e constatações</h2>";
+  h += '<div class="filtros">' + [["todas", "Todas"], ["pendentes", "Pendentes"], ["irregulares", "Irregulares"], ["sem_desfecho", "Sem desfecho"], ["duvida", "Pendente de Confirmação"]].map(function (f) {
+    return '<button type="button" data-acao="filtro" data-v="' + f[0] + '" aria-pressed="' + (filtro === f[0]) + '">' + f[1] + "</button>"; }).join("") + "</div>";
+  h += '<div class="acoes"><button class="btn cheio" type="button" data-acao="nova">＋ Nova constatação</button></div>';
+  // Constatações acrescentadas no alto, a mais recente primeiro, logo abaixo do
+  // botão; depois as ementas da OS, na ordem da OS.
+  var vis = vivos().filter(passaFiltro);
+  vis = vis.filter(function (i) { return i.origem !== "os"; }).reverse()
+    .concat(vis.filter(function (i) { return i.origem === "os"; }));
+  h += vis.length ? vis.map(cartao).join("") : '<p class="vazio">Nada neste filtro.</p>';
+  // Fotos a distribuir no FIM da página (pedido da AFT, 14/10/2026: não queria
+  // as fotos todas no início).
   var band = fotosNaBandeja();
   h += "<h2>Fotos a distribuir" + (band.length ? " (" + band.length + ")" : "") + "</h2>";
   h += '<div class="acoes"><button class="btn" type="button" data-acao="bandeja-importar">📥 Importar fotos da câmera</button></div>';
@@ -763,16 +808,6 @@ function render() {
         + '<option value="x">✕ Descartar a foto</option></select></figure>';
     }).join("") + "</div>";
   } else h += '<p class="vazio">Nenhuma foto esperando. As fotos importadas chegam aqui já carimbadas.</p>';
-  h += "<h2>Ementas e constatações</h2>";
-  h += '<div class="filtros">' + [["todas", "Todas"], ["pendentes", "Pendentes"], ["irregulares", "Irregulares"], ["sem_desfecho", "Sem desfecho"], ["duvida", "Pendente de Confirmação"]].map(function (f) {
-    return '<button type="button" data-acao="filtro" data-v="' + f[0] + '" aria-pressed="' + (filtro === f[0]) + '">' + f[1] + "</button>"; }).join("") + "</div>";
-  h += '<div class="acoes"><button class="btn cheio" type="button" data-acao="nova">＋ Nova constatação</button></div>';
-  // Constatações acrescentadas no alto, a mais recente primeiro, logo abaixo do
-  // botão; depois as ementas da OS, na ordem da OS.
-  var vis = vivos().filter(passaFiltro);
-  vis = vis.filter(function (i) { return i.origem !== "os"; }).reverse()
-    .concat(vis.filter(function (i) { return i.origem === "os"; }));
-  h += vis.length ? vis.map(cartao).join("") : '<p class="vazio">Nada neste filtro.</p>';
   h += '<details class="config"><summary>Nome do estabelecimento no carimbo</summary>'
     + '<input type="text" data-campo="estabelecimento" value="' + esc(estado.carimbo.estabelecimento || "") + '"></details>';
   app.innerHTML = h;
@@ -864,6 +899,12 @@ app.addEventListener("change", function (ev) {
     if (!dest) return;
     if (dest === "x" && !confirm("Descartar esta foto?")) { ev.target.value = ""; return; }
     mandarFoto(fig.getAttribute("data-foto"), dest); return; }
+  if (cmp === "copiar-fotos") {
+    var cc = ev.target.closest(".cartao"), ic = cc && item(cc.getAttribute("data-id")), dc = ev.target.value;
+    if (!ic || !dc) return;
+    var n = copiarFotos(ic.fotos.filter(function (f) { return !f.apagado; }), dc);
+    render(); toast(n ? n + (n > 1 ? " fotos copiadas para " : " foto copiada para ") + nomeDestino(dc) + "." : "Essas fotos já estavam lá.", 3500);
+    return; }
   if (cmp === "bandeja-todas") {
     var d = ev.target.value; if (!d) return;
     var ids = fotosNaBandeja().map(function (f) { return f.id; });
@@ -979,11 +1020,18 @@ document.getElementById("cam-lanterna").addEventListener("click", function () {
     .catch(function () { cam.lanterna = !cam.lanterna; });
 });
 var visorAtual = null;
+document.getElementById("visor-copiar").addEventListener("change", function () {
+  var d = this.value; if (!d || !visorAtual) return;
+  var n = copiarFotos([visorAtual.f], d);
+  toast(n ? "Foto copiada para " + nomeDestino(d) + "." : "Essa foto já estava lá.", 3000);
+  this.value = "";
+});
 function abrirVisor(it, fid) {
   var f = it.fotos.filter(function (x) { return x.id === fid; })[0]; if (!f) return;
   visorAtual = {it: it, f: f};
   document.getElementById("visor-img").src = f.data;
   document.getElementById("visor-legenda").value = f.legenda || "";
+  document.getElementById("visor-copiar").innerHTML = '<option value="">escolha… (pode copiar para várias)</option>' + opcoesDestino(it.id);
   document.getElementById("visor").showModal();
 }
 document.getElementById("visor").addEventListener("click", function (ev) {
