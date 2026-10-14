@@ -11,7 +11,7 @@
 //  - "prancheta-aft": as marcações, que o arquivo da prancheta grava sozinho a
 //    cada toque (é o mesmo banco que ele usa aberto direto no navegador).
 // Nada vai a servidor nenhum.
-var VERSAO = "2026.10.14-1022";
+var VERSAO = "2026.10.14-1040";
 var MARCA = '<script id="dados-prancheta" type="application/json">';
 var MARCA_EM = '<script id="ementario-prancheta" type="application/json">';
 var FIM = "<\/script>";
@@ -272,7 +272,8 @@ function fechar(semHistorico) {
   setTimeout(function () {
     if (a.iframe.parentNode) a.iframe.remove();
     URL.revokeObjectURL(a.url);
-    atualizarResumo(a.chave).then(listar);
+    atualizarResumo(a.chave).then(function () {
+      if (atualizacaoPendente && !aberta) location.reload(); else listar(); });
   }, 1500);
   listar();
 }
@@ -367,18 +368,33 @@ function armazenamento() {
 }
 
 $("versao").textContent = "Versão " + VERSAO + " · os dados ficam neste aparelho e só saem pelo Exportar.";
+// Atualização (pedido da AFT, 14/10/2026: "não consegui atualizar o app"): a
+// versão nova entra sozinha. Quando o celular baixa a versão nova, a tela se
+// recarrega na hora, exceto com uma prancheta aberta (recarregar ali poderia
+// perder o último toque): nesse caso, recarrega ao voltar para Minhas OS.
+var atualizacaoPendente = false, procurando = false;
+function recarregarParaNovaVersao() {
+  if (aberta) { atualizacaoPendente = true; toast("Versão nova do app pronta. Ela entra quando você voltar para Minhas OS.", 4500); return; }
+  location.reload();
+}
 if ("serviceWorker" in navigator) {
   var jaInstalado = !!navigator.serviceWorker.controller;   // primeira abertura não é "atualização"
-  navigator.serviceWorker.register("sw.js").then(function (reg) {
-    reg.addEventListener("updatefound", function () {
-      var nova = reg.installing;
-      if (nova) nova.addEventListener("statechange", function () {
-        if (nova.state === "activated" && jaInstalado)
-          toast("App atualizado. A nova versão vale na próxima abertura.", 4000);
-      });
-    });
-  }).catch(function () {});
+  var recarregou = false;
+  navigator.serviceWorker.addEventListener("controllerchange", function () {
+    if (!jaInstalado || recarregou) return;
+    recarregou = true; recarregarParaNovaVersao();
+  });
+  navigator.serviceWorker.register("sw.js").then(function (reg) { reg.update().catch(function () {}); }).catch(function () {});
 }
+$("btn-atualizar").addEventListener("click", function () {
+  if (!("serviceWorker" in navigator) || procurando) return;
+  procurando = true; toast("Procurando versão nova…", 2500);
+  navigator.serviceWorker.getRegistration().then(function (reg) { return reg && reg.update(); })
+    .then(function () {
+      setTimeout(function () { procurando = false;
+        if (!recarregou) toast("O app já está na versão mais nova (" + VERSAO + ").", 3500); }, 4000);
+    }).catch(function () { procurando = false; toast("Sem internet agora. Tente de novo com sinal.", 3500); });
+});
 
 // Partida: resumo das OS que ficaram abertas (o app pode ter sido fechado com a
 // prancheta na tela), e a lista.
