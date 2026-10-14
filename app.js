@@ -11,7 +11,7 @@
 //  - "prancheta-aft": as marcações, que o arquivo da prancheta grava sozinho a
 //    cada toque (é o mesmo banco que ele usa aberto direto no navegador).
 // Nada vai a servidor nenhum.
-var VERSAO = "2026.10.14-1924";
+var VERSAO = "2026.10.14-1932";
 var MARCA = '<script id="dados-prancheta" type="application/json">';
 var MARCA_EM = '<script id="ementario-prancheta" type="application/json">';
 var FIM = "<\/script>";

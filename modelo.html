@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="prancheta-codigo" content="2026-10-14T22:23:38Z">
+<meta name="prancheta-codigo" content="2026-10-14T22:30:06Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Prancheta de Inspeção</title>
 <style>
@@ -333,9 +333,16 @@ function importarParaBandeja() {
 }
 // Destinos de foto (pedido da AFT, 14/10/2026): as IRREGULARIDADES primeiro
 // (ementas da OS e constatações marcadas Irregular), depois indícios e o resto.
+// Título do cartão (pedido da AFT, 14/10/2026, cobrado de novo: "ainda tem
+// irregularidade com título de constatação"): constatação marcada Irregular, ou
+// vinda de indício pelo ＋, é "Irregularidade".
+function tituloItem(i) {
+  if (i.origem === "os") return "Ementa da OS";
+  return i.de_indicio || i.situacao === "irregular" ? "Irregularidade" : "Constatação";
+}
 function rotuloItem(i) {
   if (i.origem === "os") return (i.codigo ? i.codigo + " · " : "") + curto(i.descricao || i.relato || "");
-  return (i.de_indicio ? "Irregularidade" : "Constatação") + (i.codigo ? " " + i.codigo : "") + " · " + curto(i.relato || "(sem relato)");
+  return tituloItem(i) + (i.codigo ? " " + i.codigo : "") + " · " + curto(i.relato || "(sem relato)");
 }
 function opcoesDestino(excluir) {
   var todos = vivos().filter(function (i) { return i.id !== excluir; }), o = "";
@@ -376,13 +383,13 @@ function copiarFotos(fotos, destino) {
 }
 function nomeDestino(destino) {
   var it = destino.charAt(0) === "c" ? item(destino.slice(2)) : null;
-  if (it) return it.origem === "os" ? "a ementa " + (it.codigo || "") : (it.de_indicio ? "a irregularidade" : "a constatação")
+  if (it) return it.origem === "os" ? "a ementa " + (it.codigo || "") : (tituloItem(it) === "Irregularidade" ? "a irregularidade" : "a constatação")
     + (it.codigo ? " " + it.codigo : "");
   return "o indício";
 }
 function nomeCurtoDestino(destino) {
   var it = destino.charAt(0) === "c" ? item(destino.slice(2)) : null;
-  if (it && !it.apagado) return it.origem === "os" ? (it.codigo || "ementa") : (it.codigo || (it.de_indicio ? "Irregularidade" : "Constatação"));
+  if (it && !it.apagado) return it.origem === "os" ? (it.codigo || "ementa") : (it.codigo || tituloItem(it));
   var ind = destino.charAt(0) === "i" ? indicio(destino.slice(2)) : null;
   return ind && !ind.apagado ? "indício" : "";
 }
@@ -762,7 +769,7 @@ function blocoEmenta(it) {
 function cartao(it) {
   it.fotos = it.fotos || []; it.documentos = it.documentos || [];
   var h = '<div class="cartao" data-id="' + esc(it.id) + '" data-sit="' + esc(it.situacao || "") + '" data-duvida="' + it.duvida + '">';
-  h += '<div class="topo"><div class="tit"><span class="cod">' + (it.origem === "os" ? "Ementa da OS" : it.de_indicio ? "Irregularidade" : "Constatação") + "</span>";
+  h += '<div class="topo"><div class="tit"><span class="cod">' + tituloItem(it) + "</span>";
   if (it.duvida) h += '<span class="marca-duvida">Pendente de Confirmação</span>';
   h += '</div><button class="duvida" type="button" data-acao="duvida" aria-pressed="' + it.duvida
     + '" title="Não tenho certeza de que é infração" aria-label="Marcar como Pendente de Confirmação">?</button></div>';
