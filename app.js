@@ -11,7 +11,7 @@
 //  - "prancheta-aft": as marcações, que o arquivo da prancheta grava sozinho a
 //    cada toque (é o mesmo banco que ele usa aberto direto no navegador).
 // Nada vai a servidor nenhum.
-var VERSAO = "2026.10.14-1040";
+var VERSAO = "2026.10.14-1052";
 var MARCA = '<script id="dados-prancheta" type="application/json">';
 var MARCA_EM = '<script id="ementario-prancheta" type="application/json">';
 var FIM = "<\/script>";
@@ -240,6 +240,33 @@ function tirar(k) {
   });
 }
 
+// ------------------------------------------------------------ código sempre o mais novo
+// Pedido da AFT, 14/10/2026 ("meu app continua errado"): o carimbo e a tela
+// moram DENTRO do arquivo de cada OS guardado no celular. Ao abrir, o app troca
+// o código desse arquivo pelo do modelo que vem com ele (o mesmo do computador),
+// mantendo intactos os dados e o ementário da OS. Assim toda correção chega a
+// todas as OS do celular sem abrir os arquivos de novo.
+function blocoDe(h, m) { var i = h.indexOf(m); if (i < 0) return null; var c = i + m.length, f = h.indexOf(FIM, c); return f < 0 ? null : h.slice(c, f); }
+function trocarBloco(h, m, conteudo) { var c = h.indexOf(m) + m.length; return h.slice(0, c) + conteudo + h.slice(h.indexOf(FIM, c)); }
+function esqueleto(h) {
+  h = h.replace(/\r\n/g, "\n").replace(/<title>[^<]*<\/title>/, "<title></title>");
+  if (h.indexOf(MARCA_EM) >= 0) h = trocarBloco(h, MARCA_EM, "");
+  if (h.indexOf(MARCA) >= 0) h = trocarBloco(h, MARCA, "");
+  return h;
+}
+function comCodigoNovo(html) {
+  return texto("modelo.html").then(function (modelo) {
+    if (modelo.indexOf(MARCA) < 0 || modelo.indexOf(MARCA_EM) < 0) return html;
+    if (esqueleto(modelo) === esqueleto(html)) return html;
+    var dados = blocoDe(html, MARCA); if (dados == null) return html;
+    var em = blocoDe(html, MARCA_EM), titulo = (html.match(/<title>[^<]*<\/title>/) || [""])[0];
+    var novo = modelo;
+    if (titulo) novo = novo.replace(/<title>[^<]*<\/title>/, titulo);
+    if (em && em.length > 2) novo = trocarBloco(novo, MARCA_EM, em);
+    return trocarBloco(novo, MARCA, dados);
+  }).catch(function () { return html; });
+}
+
 // ------------------------------------------------------------ prancheta aberta
 var aberta = null;   // {chave, iframe, url}
 function abrir(k) {
@@ -247,6 +274,13 @@ function abrir(k) {
   Promise.all([oss.ler(k), arquivos.ler(k)]).then(function (r) {
     var o = r[0], html = r[1];
     if (!o || !html) { alert("Não achei o arquivo desta OS no celular. Abra os arquivos das OS de novo."); return; }
+    return comCodigoNovo(html).then(function (novo) {
+      if (novo !== html) { arquivos.gravar(k, novo).catch(function () {}); html = novo; }
+      return [o, html];
+    });
+  }).then(function (r) {
+    if (!r) return;
+    var o = r[0], html = r[1];
     var url = URL.createObjectURL(new Blob([html], {type: "text/html"}));
     var fr = document.createElement("iframe");
     fr.setAttribute("allow", "web-share; camera; fullscreen");
