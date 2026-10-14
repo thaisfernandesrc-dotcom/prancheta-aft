@@ -11,7 +11,7 @@
 //  - "prancheta-aft": as marcações, que o arquivo da prancheta grava sozinho a
 //    cada toque (é o mesmo banco que ele usa aberto direto no navegador).
 // Nada vai a servidor nenhum.
-var VERSAO = "2026.10.14-1";
+var VERSAO = "2026.10.14-0824";
 var MARCA = '<script id="dados-prancheta" type="application/json">';
 var MARCA_EM = '<script id="ementario-prancheta" type="application/json">';
 var FIM = "<\/script>";
@@ -108,35 +108,52 @@ function resumo(s) {
 }
 
 // Guarda no aparelho o arquivo de uma OS. Se a OS já está aqui, troca o
-// arquivo: as marcações do aparelho não se perdem, porque a prancheta, ao
-// abrir, junta o arquivo com o que está guardado e fica o mais novo de cada item.
-function guardarArquivo(html, nomeArq, perguntar) {
+// arquivo sem perguntar: as marcações do aparelho não se perdem, porque a
+// prancheta, ao abrir, junta o arquivo com o que está guardado e fica o mais
+// novo de cada item. Devolve {reg, novo} ou {erro}.
+function guardarArquivo(html, nomeArq) {
   var b = blocoDados(html);
-  if (!b || !b.dados.os) {
-    alert("Este arquivo não é uma prancheta de OS. Escolha o arquivo prancheta-OS….html da pasta prancheta da OS.");
-    return Promise.resolve(null);
-  }
+  if (!b || !b.dados.os) return Promise.resolve({erro: (nomeArq || "arquivo") + ": não é uma prancheta de OS"});
   var d = b.dados, k = chave(d);
   return oss.ler(k).then(function (ant) {
-    if (ant && perguntar && !confirm("A OS " + d.os + " já está neste celular.\n\nTrocar pelo arquivo escolhido? "
-        + "Nada do que você marcou no celular se perde: ao abrir, a prancheta junta o arquivo com o celular e fica o mais novo de cada item.")) return null;
+    // Mesma OS e mesmo RI de OUTRA empresa: as marcações das duas se
+    // misturariam (a prancheta guarda pela OS e pelo RI). Não junta.
+    if (ant && ant.empresa && d.empresa && ant.empresa !== d.empresa)
+      return {erro: (nomeArq || d.empresa) + ": tem a mesma OS e o mesmo RI de " + ant.empresa
+        + ", que já está neste celular. Não abri, para não misturar as marcações."};
     var reg = ant || {chave: k, criado_em: agoraIso(), exportado_em: null};
     reg.os = d.os; reg.ri = d.ri || ""; reg.empresa = d.empresa || "";
     reg.arquivo = nomeArq || reg.arquivo || ""; reg.importado_em = agoraIso();
     reg.tamanho = html.length;
     if (!ant) { reg.resumo = resumo(d); reg.salvo_em = d.salvo_em || null; }
     return arquivos.gravar(k, html).then(function () { return oss.gravar(reg); }).then(function () {
-      aprenderCarimbo(d.carimbo); pedirPersistencia(); return reg;
+      aprenderCarimbo(d.carimbo); pedirPersistencia(); return {reg: reg, novo: !ant};
     });
   });
 }
 $("btn-importar").addEventListener("click", function () { $("arquivo").value = ""; $("arquivo").click(); });
+// Um ou vários arquivos (a pasta "Pranchetas para o celular" inteira). Um por
+// vez, para não encher a memória do celular com todos ao mesmo tempo.
 $("arquivo").addEventListener("change", function () {
-  var f = this.files && this.files[0]; if (!f) return;
-  toast("Abrindo " + f.name + "…", 2000);
-  f.text().then(function (txt) { return guardarArquivo(txt, f.name, true); })
-    .then(function (reg) { if (reg) { listar(); abrir(reg.chave); } })
-    .catch(function () { alert("Não consegui ler esse arquivo."); });
+  var fila = Array.prototype.slice.call(this.files || []); if (!fila.length) return;
+  var novas = [], atualizadas = [], erros = [], ultimo = null, p = Promise.resolve();
+  toast(fila.length > 1 ? "Abrindo " + fila.length + " arquivos…" : "Abrindo " + fila[0].name + "…", 2500);
+  fila.forEach(function (f) {
+    p = p.then(function () { return f.text(); }).then(function (txt) { return guardarArquivo(txt, f.name); })
+      .then(function (r) {
+        if (r.erro) { erros.push(r.erro); return; }
+        ultimo = r.reg; (r.novo ? novas : atualizadas).push("OS " + r.reg.os + (r.reg.empresa ? " (" + r.reg.empresa + ")" : ""));
+      }).catch(function () { erros.push(f.name + ": não consegui ler"); });
+  });
+  p.then(function () {
+    listar();
+    if (fila.length === 1 && ultimo && !erros.length) { abrir(ultimo.chave); return; }
+    var msg = [];
+    if (novas.length) msg.push(novas.length + " OS nova(s):\n" + novas.join("\n"));
+    if (atualizadas.length) msg.push(atualizadas.length + " OS atualizada(s):\n" + atualizadas.join("\n"));
+    if (erros.length) msg.push("⚠ Não abri:\n" + erros.join("\n"));
+    alert(msg.join("\n\n") || "Nenhum arquivo aberto.");
+  });
 });
 
 // OS em branco: o modelo da prancheta e o ementário vêm junto com o app.
@@ -157,7 +174,8 @@ $("dlg-nova").addEventListener("close", function () {
     if (ant) { alert("A OS " + os + " já está neste celular."); return null; }
     return criarEmBranco(os, ri, emp);
   }).then(function (reg) { if (reg) { listar(); abrir(reg.chave); } })
-    .catch(function () { alert("Não consegui criar a prancheta. Abra o app com internet uma vez, para ele baixar o modelo."); });
+    .catch(function (e) { alert(e && /mesma OS/.test(e.message || "") ? e.message
+      : "Não consegui criar a prancheta. Abra o app com internet uma vez, para ele baixar o modelo."); });
 });
 function texto(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error(url); return r.text(); }); }
 function criarEmBranco(os, ri, empresa) {
@@ -172,7 +190,8 @@ function criarEmBranco(os, ri, empresa) {
       gerado_em: agoraIso(), salvo_em: null, salvo_por: "app", itens: [], observacoes: "", observacoes_em: null};
     var b = blocoDados(html);
     html = html.slice(0, b.c) + JSON.stringify(dados).replace(/<\//g, "<\\/") + html.slice(b.f);
-    return guardarArquivo(html, "prancheta-OS" + os + ".html", false);
+    return guardarArquivo(html, "prancheta-OS" + os + ".html").then(function (r) {
+      if (r.erro) throw new Error(r.erro); return r.reg; });
   });
 }
 
@@ -180,7 +199,7 @@ function criarEmBranco(os, ri, empresa) {
 function listar() {
   return oss.todas().then(function (lst) {
     lst.sort(function (a, b) { return ts(b.aberto_em || b.importado_em) - ts(a.aberto_em || a.importado_em); });
-    if (!lst.length) { $("lista").innerHTML = '<p class="vazio">Nenhuma OS ainda. Toque em Abrir arquivo da OS.</p>'; return; }
+    if (!lst.length) { $("lista").innerHTML = '<p class="vazio">Nenhuma OS ainda. Toque em Abrir arquivos das OS.</p>'; return; }
     $("lista").innerHTML = lst.map(function (o) {
       var r = o.resumo || {}, partes = [];
       if (r.tot) partes.push(r.feitos + "/" + r.tot + " ementas marcadas");
@@ -227,7 +246,7 @@ function abrir(k) {
   if (aberta) fechar(true);
   Promise.all([oss.ler(k), arquivos.ler(k)]).then(function (r) {
     var o = r[0], html = r[1];
-    if (!o || !html) { alert("Não achei o arquivo desta OS no celular. Abra o arquivo da OS de novo."); return; }
+    if (!o || !html) { alert("Não achei o arquivo desta OS no celular. Abra os arquivos das OS de novo."); return; }
     var url = URL.createObjectURL(new Blob([html], {type: "text/html"}));
     var fr = document.createElement("iframe");
     fr.setAttribute("allow", "web-share; camera; fullscreen");

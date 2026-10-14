@@ -19,20 +19,20 @@
   </header>
   <main>
     <div class="acoes-principais">
-      <button class="btn cheio" type="button" id="btn-importar">📂 Abrir arquivo da OS</button>
+      <button class="btn cheio" type="button" id="btn-importar">📂 Abrir arquivos das OS</button>
       <button class="btn" type="button" id="btn-nova">＋ OS em branco</button>
     </div>
-    <p class="dica">Abra o arquivo <b>prancheta-OS….html</b> da pasta <b>prancheta</b> da OS (no OneDrive). Ele fica guardado neste celular e funciona sem internet.</p>
+    <p class="dica">No OneDrive, entre na pasta <b>AFT › Pranchetas para o celular</b> e selecione todos os arquivos de uma vez (toque longo no primeiro e depois toque nos outros). Eles ficam guardados neste celular e funcionam sem internet.</p>
     <h2>Minhas OS neste celular</h2>
     <div id="lista"></div>
 
     <details class="bloco">
       <summary>Como usar</summary>
       <ol>
-        <li><b>Abrir arquivo da OS</b> e escolher, no OneDrive, o arquivo da pasta <b>prancheta</b> da OS.</li>
+        <li><b>Abrir arquivos das OS</b>: no OneDrive, pasta <b>AFT › Pranchetas para o celular</b>, selecionar todos. OS nova entra; OS que já estava aqui se atualiza.</li>
         <li>Marcar, fotografar e anotar. Tudo fica guardado neste celular a cada toque.</li>
-        <li>Tocar em <b>Exportar</b> (rodapé da prancheta), escolher <b>OneDrive</b>, a pasta <b>prancheta</b> da OS e <b>substituir</b> o arquivo.</li>
-        <li>Se o arquivo da pasta mudou no computador (enquadramento, constatação nova), abrir de novo o arquivo: o app junta os dois e fica o mais novo de cada item.</li>
+        <li>Tocar em <b>Exportar</b> (rodapé da prancheta), escolher <b>OneDrive</b>, a pasta <b>prancheta</b> da própria OS e <b>substituir</b> o arquivo.</li>
+        <li>Abrir de novo os arquivos sempre que quiser trazer o que mudou no computador (OS nova, enquadramento). Nada do que foi marcado no celular se perde: o app junta e fica o mais novo de cada item.</li>
       </ol>
     </details>
 
@@ -78,7 +78,7 @@
   </form>
 </dialog>
 
-<input type="file" id="arquivo" accept=".html,.htm,text/html" hidden>
+<input type="file" id="arquivo" accept=".html,.htm,text/html" multiple hidden>
 <script src="app.js"></script>
 </body>
 </html>
