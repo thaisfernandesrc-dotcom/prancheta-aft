@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="prancheta-codigo" content="2026-10-14T22:13:57Z">
+<meta name="prancheta-codigo" content="2026-10-14T22:23:38Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Prancheta de Inspeção</title>
 <style>
@@ -59,7 +59,10 @@ h2{font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--suav
 .sits button[data-v="nao_aplicavel"][aria-pressed="true"]{background:var(--na-f);border-color:var(--na);color:var(--na)}
 .desfechos{margin-top:10px;border-top:1px dashed var(--linha);padding-top:8px}
 .desfechos .rot2{font-size:12px;color:var(--suave);display:block;margin-bottom:6px}
-.desfechos .grade{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.desfechos .grade{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:6px}
+.desfechos button.desf-toggle{display:block;width:100%;min-height:32px;border:0;background:none;padding:2px 0;font-size:12.5px;font-weight:400;color:var(--suave);text-align:left;cursor:pointer}
+.desf-toggle .seta{display:inline-block;width:1.1em;color:var(--azul);font-size:15px;font-weight:700}
+.desf-toggle b{color:var(--azul);font-weight:600}
 .desfechos button{min-height:30px;border-radius:7px;border:1.5px solid var(--linha);background:#fff;font-size:12px;font-weight:600;color:var(--texto);line-height:1.15;padding:3px 5px}
 .desfechos button small{display:block;font-size:10px;font-weight:400}
 .desfechos button[aria-pressed="true"]{background:var(--azul-claro);border-color:var(--azul);color:var(--azul)}
@@ -203,6 +206,7 @@ var DESFECHOS = [["autuado", "Autuado"], ["regularizado", "Regularizado"],
 var TIPOS = {os: "OS", inspecao: "Inspeção física", documental: "Análise documental"};
 var TIPOS_CURTO = {os: "OS", inspecao: "Inspeção", documental: "Documental"};   // cabe numa linha no celular
 var filtro = "todas";
+var desfAberto = {};   // cartões com o Desfecho aberto (só nesta tela; começa fechado)
 var app = document.getElementById("app");
 var guardaAparelho = "idb";         // idb | local (só texto) | nenhum
 var arquivoHandle = null;           // computador: o arquivo da pasta da OS
@@ -774,10 +778,17 @@ function cartao(it) {
     return '<button type="button" data-acao="situacao" data-v="' + s[0] + '" aria-pressed="' + (it.situacao === s[0]) + '">' + s[1] + "</button>"; }).join("") + "</div>";
   if (it.situacao === "irregular") {
     var df = it.desfechos || {};
-    h += '<div class="desfechos"><span class="rot2">Desfecho (SFIT-WEB), pode marcar mais de um:</span><div class="grade">'
-      + DESFECHOS.map(function (d) { var em = df[d[0]];
+    // Seta para mostrar/ocultar as opções (pedido da AFT, 14/10/2026). Fechado
+    // (padrão), a linha diz o que já está marcado.
+    var aberto = !!desfAberto[it.id];
+    var marcados = DESFECHOS.filter(function (d) { return df[d[0]]; }).map(function (d) { return d[1]; });
+    h += '<div class="desfechos"><button type="button" class="desf-toggle" data-acao="desf-toggle" aria-expanded="' + aberto + '">'
+      + '<span class="seta">' + (aberto ? "▾" : "▸") + "</span>Desfecho (SFIT-WEB)"
+      + (aberto ? ", pode marcar mais de um:" : marcados.length ? ": <b>" + esc(marcados.join(", ")) + "</b>" : ": nenhum marcado")
+      + "</button>"
+      + (aberto ? '<div class="grade">' + DESFECHOS.map(function (d) { var em = df[d[0]];
         return '<button type="button" data-acao="desfecho" data-v="' + d[0] + '" aria-pressed="' + !!em + '">' + d[1]
-          + (em ? "<small>" + esc(em) + "</small>" : "") + "</button>"; }).join("") + "</div></div>";
+          + (em ? "<small>" + esc(em) + "</small>" : "") + "</button>"; }).join("") + "</div>" : "") + "</div>";
   }
   h += '<div class="acoes"><button class="btn" type="button" data-acao="foto">📷 Foto</button>';
   h += '<button class="btn" type="button" data-acao="galeria">🖼 Galeria</button>';
@@ -906,6 +917,7 @@ app.addEventListener("click", function (ev) {
     var v = alvo.getAttribute("data-v"); it.situacao = it.situacao === v ? "" : v;
     if (it.situacao && !it.constatado_em) it.constatado_em = hoje();
     mudou(it); render(); return; }
+  if (acao === "desf-toggle" && it) { desfAberto[it.id] = !desfAberto[it.id]; render(); return; }
   if (acao === "desfecho" && it) {
     var k = alvo.getAttribute("data-v"); it.desfechos = it.desfechos || {};
     if (it.desfechos[k]) delete it.desfechos[k]; else it.desfechos[k] = hoje();
