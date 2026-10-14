@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prancheta de Inspeção</title>
+<style>
+:root{
+  --fundo:#f4f6f9; --cartao:#ffffff; --texto:#17202b; --suave:#5b6878; --linha:#d9dfe7;
+  --azul:#1e4c8a; --azul-claro:#e8f0fb;
+  --regular:#1f7a46; --regular-f:#e3f4ea;
+  --irregular:#b3261e; --irregular-f:#fbe7e5;
+  --nv:#6b7280; --nv-f:#eef0f3;
+  --na:#475569; --na-f:#e9eef5;
+  --doc:#7a4b00; --doc-f:#fff3dc;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--fundo);color:var(--texto);
+  font:16px/1.45 Roboto,"Segoe UI",Arial,sans-serif;-webkit-text-size-adjust:100%}
+body{padding:0 0 104px}
+header{position:sticky;top:0;z-index:5;background:var(--azul);color:#fff;padding:6px 16px 5px}
+header h1{margin:0;font-size:14px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header h1 b{font-weight:700}
+.barra{height:4px;background:rgba(255,255,255,.25);border-radius:2px;margin-top:5px;overflow:hidden}
+.barra i{display:block;height:100%;background:#7fd3a2;width:0}
+.contagem{font-size:11.5px;margin-top:3px;opacity:.95;line-height:1.3}
+main{max-width:760px;margin:0 auto;padding:12px 16px}
+h2{font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--suave);margin:24px 0 8px}
+.filtros{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0}
+.filtros button{border:1px solid var(--linha);background:var(--cartao);border-radius:999px;padding:6px 12px;font-size:14px;color:var(--texto)}
+.filtros button[aria-pressed="true"]{background:var(--azul);border-color:var(--azul);color:#fff}
+.cartao{background:var(--cartao);border:1px solid var(--linha);border-left:5px solid var(--linha);border-radius:10px;padding:12px;margin:10px 0}
+.cartao[data-sit="regular"]{border-left-color:var(--regular)}
+.cartao[data-sit="irregular"]{border-left-color:var(--irregular)}
+.cartao[data-sit="nao_verificado"]{border-left-color:var(--nv)}
+.cartao[data-sit="nao_aplicavel"]{border-left-color:var(--na)}
+.cod{font-weight:700;color:var(--azul);font-size:15px}
+.grupo{font-size:12px;color:var(--suave);margin-left:6px}
+.topo{display:flex;align-items:flex-start;gap:8px}
+.topo .tit{flex:1;min-width:0}
+.duvida{flex:none;width:34px;height:34px;border-radius:50%;border:1.5px solid var(--linha);background:#fff;color:var(--suave);font-weight:800;font-size:17px;line-height:1;cursor:pointer}
+.duvida[aria-pressed="true"]{background:#ffe7a8;border-color:#d99a00;color:#7a5200}
+.marca-duvida{display:inline-block;font-size:12px;font-weight:700;color:#7a5200;background:#fff3cf;border-radius:999px;padding:1px 8px;margin-left:6px}
+.cartao[data-duvida="true"]{box-shadow:inset 0 0 0 2px #f2c14e}
+.tipos{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px;align-items:center}
+.tipos .rot2{font-size:12px;color:var(--suave);margin-right:2px}
+.tipos button{border:1px solid var(--linha);background:#fff;border-radius:999px;padding:4px 10px;font-size:13px;color:var(--texto);min-height:32px;cursor:pointer}
+.tipos button[aria-pressed="true"]{background:var(--azul);border-color:var(--azul);color:#fff}
+.tipos button[data-v="documental"][aria-pressed="true"]{background:var(--doc);border-color:var(--doc)}
+.quando{font-size:12px;color:var(--suave);margin-top:2px}
+.desc{margin:4px 0 8px;font-size:14.5px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.desc.aberta{display:block}
+.sits{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:8px}
+.sits button{min-height:34px;border-radius:7px;border:1.5px solid var(--linha);background:#fff;font-size:13px;font-weight:600;color:var(--texto);padding:3px 5px}
+.sits button[data-v="regular"][aria-pressed="true"]{background:var(--regular-f);border-color:var(--regular);color:var(--regular)}
+.sits button[data-v="irregular"][aria-pressed="true"]{background:var(--irregular-f);border-color:var(--irregular);color:var(--irregular)}
+.sits button[data-v="nao_verificado"][aria-pressed="true"]{background:var(--nv-f);border-color:var(--nv);color:var(--nv)}
+.sits button[data-v="nao_aplicavel"][aria-pressed="true"]{background:var(--na-f);border-color:var(--na);color:var(--na)}
+.desfechos{margin-top:10px;border-top:1px dashed var(--linha);padding-top:8px}
+.desfechos .rot2{font-size:12px;color:var(--suave);display:block;margin-bottom:6px}
+.desfechos .grade{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.desfechos button{min-height:30px;border-radius:7px;border:1.5px solid var(--linha);background:#fff;font-size:12px;font-weight:600;color:var(--texto);line-height:1.15;padding:3px 5px}
+.desfechos button small{display:block;font-size:10px;font-weight:400}
+.desfechos button[aria-pressed="true"]{background:var(--azul-claro);border-color:var(--azul);color:var(--azul)}
+.desfechos button[data-v="regularizado"][aria-pressed="true"]{background:var(--regular-f);border-color:var(--regular);color:var(--regular)}
+.desfechos button[data-v="embargo"][aria-pressed="true"],.desfechos button[data-v="interdicao"][aria-pressed="true"]{background:var(--irregular-f);border-color:var(--irregular);color:var(--irregular)}
+label.rot{display:block;font-size:13px;color:var(--suave);margin:10px 0 4px}
+textarea,input[type=text]{width:100%;border:1px solid var(--linha);border-radius:8px;padding:10px;font:inherit;font-size:15px;background:#fff;color:var(--texto)}
+textarea{min-height:76px;resize:vertical}
+textarea.info-gerais{min-height:130px;max-height:60vh;field-sizing:content}
+.acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.btn{min-height:44px;border-radius:8px;border:1px solid var(--azul);background:#fff;color:var(--azul);padding:0 14px;font-size:14.5px;font-weight:600;cursor:pointer}
+.btn.cheio{background:var(--azul);color:#fff}
+.btn.perigo{border-color:var(--irregular);color:var(--irregular)}
+.btn.link{border:0;background:none;padding:0 4px;min-height:32px;text-decoration:underline}
+.fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;margin-top:10px}
+.fotos figure{margin:0}
+.fotos img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;border:1px solid var(--linha);display:block;cursor:pointer}
+.fotos figcaption{font-size:11px;color:var(--suave);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.docs{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.doc{display:flex;align-items:center;gap:8px;border:1px solid var(--linha);border-radius:8px;padding:8px 10px;background:#fbfcfe}
+.doc .nome{flex:1;min-width:0;font-size:14px;color:var(--azul);text-decoration:underline;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:none;border:0;text-align:left;padding:0}
+.doc .tam{font-size:12px;color:var(--suave);flex:none}
+.doc .tirar{flex:none;border:0;background:none;color:var(--irregular);font-size:20px;line-height:1;cursor:pointer;padding:0 4px}
+.enq{margin-top:10px;background:var(--azul-claro);border:1px solid #c4d6f0;border-radius:8px;padding:10px;font-size:14px}
+.enq b{color:var(--azul)}
+.enq .desc{margin:4px 0 0}
+.linha-ementa{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.linha-ementa .rot3{font-size:13px;color:var(--azul);font-weight:700}
+.enq input.cod-ementa{width:8.5em;flex:none;padding:6px 8px;font-weight:700;color:var(--azul);font-size:15px}
+.enq .alerta{color:var(--irregular)}
+.enq .cap{font-size:12.5px;color:var(--suave);margin-top:4px}
+.aviso{background:#fff4d6;border:1px solid #f0d58a;border-radius:8px;padding:10px;font-size:14px;margin:10px 0}
+.rodape{position:fixed;left:0;right:0;bottom:0;z-index:6;background:#fff;border-top:1px solid var(--linha);
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center}
+.rodape .status{flex:1;font-size:12.5px;color:var(--suave);line-height:1.3}
+.rodape .btn{flex:none}
+dialog{border:0;border-radius:12px;padding:0;max-width:96vw;width:640px}
+dialog img{width:100%;display:block}
+dialog .corpo{padding:12px}
+#menu-foto{width:320px}
+.menu{display:flex;flex-direction:column;gap:10px}
+.menu .btn{width:100%}
+.vazio{color:var(--suave);font-size:14px;margin:6px 0}
+.toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:#17202b;color:#fff;padding:10px 14px;border-radius:8px;font-size:14px;z-index:9;max-width:90vw}
+details.config{margin-top:14px;font-size:14px}
+details.config summary{color:var(--suave);cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="titulo">Prancheta de Inspeção</h1>
+  <div class="barra"><i id="progresso"></i></div>
+  <div class="contagem" id="contagem"></div>
+</header>
+<main id="app"></main>
+<div class="rodape">
+  <div class="status" id="status">Carregando…</div>
+  <button class="btn cheio" type="button" id="btn-salvar">Salvar arquivo</button>
+</div>
+<dialog id="visor"><img id="visor-img" alt="Foto ampliada"><div class="corpo">
+  <label class="rot" for="visor-legenda">Legenda</label>
+  <input type="text" id="visor-legenda">
+  <div class="acoes"><button class="btn cheio" type="button" data-acao="visor-ok">OK</button>
+  <button class="btn perigo" type="button" data-acao="visor-apagar">Apagar foto</button></div>
+</div></dialog>
+<dialog id="menu-foto"><div class="corpo menu">
+  <button class="btn cheio" type="button" data-acao="menu-camera" autofocus>📷 Tirar foto</button>
+  <button class="btn" type="button" data-acao="menu-galeria">🖼 Escolher da galeria</button>
+  <button class="btn link" type="button" data-acao="menu-cancelar">Cancelar</button>
+</div></dialog>
+<script id="dados-prancheta" type="application/json">{}</script>
+<script id="ementario-prancheta" type="application/json">{}</script>
+<script>
+(function () {
+"use strict";
+// Prancheta de Inspeção (skill minha-prancheta). Serve à fiscalização inteira:
+// inspeção física (celular) e auditoria documental (computador). Nada vai a
+// servidor nenhum. Os dados ficam DENTRO deste arquivo (bloco dados-prancheta)
+// e, enquanto se trabalha, também no navegador do aparelho.
+//
+// Junção item a item: cada item guarda "atualizado_em"; o enquadramento tem a
+// própria hora ("em_iso"); item apagado fica marcado ("apagado"), não some.
+// Assim celular, computador e o script do assistente podem mexer no mesmo
+// arquivo sem que a versão de um apague o trabalho do outro.
+var MARCA = '<script id="dados-prancheta" type="application/json">';
+var PRISTINE = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+var estado;
+try { estado = JSON.parse(document.getElementById("dados-prancheta").textContent || "{}"); }
+catch (e) { estado = {}; }
+normalizar(estado);
+var SITS = [["regular", "Regular"], ["irregular", "Irregular"],
+            ["nao_verificado", "Não verificado"], ["nao_aplicavel", "Não aplicável"]];
+// Desfecho do item irregular, com as opções do SFIT-WEB. Pode haver mais de um
+// (ex.: interdição e autuado; depois levantamento e regularizado). Cada um
+// guarda a data em que foi marcado.
+var DESFECHOS = [["autuado", "Autuado"], ["regularizado", "Regularizado"],
+                 ["embargo", "Embargo"], ["lev_embargo", "Levantamento de Embargo"],
+                 ["interdicao", "Interdição"], ["lev_interdicao", "Levantamento de Interdição"]];
+var TIPOS = {os: "OS", inspecao: "Inspeção física", documental: "Análise documental"};
+var TIPOS_CURTO = {os: "OS", inspecao: "Inspeção", documental: "Documental"};   // cabe numa linha no celular
+var filtro = "todas";
+var app = document.getElementById("app");
+var guardaAparelho = "idb";         // idb | local (só texto) | nenhum
+var arquivoHandle = null;           // computador: o arquivo da pasta da OS
+var arquivoPermitido = false;
+var salvoNoArquivoEm = null, exportadoEm = null, gravadoEm = null;
+var alteradoDepoisDeSalvar = false;
+// Celular usa sempre "Salvar arquivo" → compartilhar → OneDrive. O Chrome do
+// Android também tem a gravação direta, mas ela não foi testada com o OneDrive;
+// por isso só o computador grava direto no arquivo da pasta da OS.
+var EH_CELULAR = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")
+  || !!(navigator.userAgentData && navigator.userAgentData.mobile);
+var PODE_GRAVAR_DIRETO = typeof window.showSaveFilePicker === "function" && !EH_CELULAR;
+
+function normalizar(s) {
+  s.itens = s.itens || []; s.observacoes = s.observacoes || ""; s.carimbo = s.carimbo || {};
+  s.itens.forEach(function (it) {
+    // tipo: "os" (padrão das ementas da OS), "inspecao" ou "documental"
+    if (!it.tipo) it.tipo = it.origem === "os" ? (it.fase || "os") : (it.fase || "inspecao");
+    delete it.fase;
+    it.duvida = !!it.duvida;
+    it.fotos = it.fotos || [];
+    it.documentos = it.documentos || [];
+    if (!it.desfechos || typeof it.desfechos !== "object") it.desfechos = {};
+  });
+  return s;
+}
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+  return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]; }); }
+function dois(n) { return (n < 10 ? "0" : "") + n; }
+function fmtData(d) { return dois(d.getDate()) + "/" + dois(d.getMonth() + 1) + "/" + d.getFullYear()
+  + " " + dois(d.getHours()) + ":" + dois(d.getMinutes()); }
+function hoje() { var d = new Date(); return dois(d.getDate()) + "/" + dois(d.getMonth() + 1) + "/" + d.getFullYear(); }
+function hhmm(d) { return dois(d.getHours()) + ":" + dois(d.getMinutes()); }
+function agoraIso() { return new Date().toISOString(); }
+function ts(x) { var t = x ? Date.parse(x) : NaN; return isNaN(t) ? 0 : t; }
+function chave() { return "prancheta|" + (estado.os || "") + "|" + (estado.ri || ""); }
+function toast(t, ms) { var el = document.createElement("div"); el.className = "toast"; el.textContent = t;
+  document.body.appendChild(el); setTimeout(function () { el.remove(); }, ms || 2600); }
+function item(id) { for (var i = 0; i < estado.itens.length; i++) if (estado.itens[i].id === id) return estado.itens[i]; return null; }
+function copia(x) { return JSON.parse(JSON.stringify(x)); }
+
+// ------------------------------------------------------------ junção
+function mesclar(a, b) {
+  var r = copia(ts(a.salvo_em) >= ts(b.salvo_em) ? a : b);
+  var mapa = {}, ordem = [];
+  [a, b].forEach(function (s) { (s.itens || []).forEach(function (it) {
+    if (!mapa[it.id]) { mapa[it.id] = []; ordem.push(it.id); } mapa[it.id].push(it); }); });
+  r.itens = ordem.map(function (id) {
+    var vs = mapa[id];
+    if (vs.length === 1) return copia(vs[0]);
+    var x = vs[0], y = vs[1];
+    var out = copia(ts(x.atualizado_em) >= ts(y.atualizado_em) ? x : y);
+    var ex = x.enquadramento, ey = y.enquadramento;
+    out.enquadramento = !ex ? (ey || null) : !ey ? ex : (ts(ex.em_iso) >= ts(ey.em_iso) ? ex : ey);
+    out.fotos = somarAnexos(x.fotos, y.fotos);
+    out.documentos = somarAnexos(x.documentos, y.documentos);
+    // Gradação da ementa da OS: o assistente a preenche no arquivo; a cópia do
+    // aparelho pode ser anterior a isso e não a ter.
+    if (!out.gradacao && (x.gradacao || y.gradacao)) out.gradacao = x.gradacao || y.gradacao;
+    return out;
+  });
+  var obsA = ts(a.observacoes_em) >= ts(b.observacoes_em);
+  r.observacoes = obsA ? a.observacoes : b.observacoes;
+  r.observacoes_em = obsA ? a.observacoes_em : b.observacoes_em;
+  var ca = a.carimbo || {}, cb = b.carimbo || {};
+  r.carimbo = copia(ts(ca.atualizado_em) >= ts(cb.atualizado_em) ? ca : cb);
+  r.salvo_em = ts(a.salvo_em) >= ts(b.salvo_em) ? a.salvo_em : b.salvo_em;
+  return normalizar(r);
+}
+// Fotos e documentos: soma dos dois lados, pelo id. Removido fica marcado
+// ("apagado") para não voltar pela junção com a outra versão.
+function somarAnexos(a, b) {
+  var mapa = {}, ordem = [];
+  (a || []).concat(b || []).forEach(function (f) {
+    if (!mapa[f.id]) { mapa[f.id] = copia(f); ordem.push(f.id); }
+    else if (f.apagado) { mapa[f.id] = {id: f.id, apagado: true}; }
+  });
+  return ordem.map(function (id) { return mapa[id]; });
+}
+function semInternos(s) {
+  var c = copia(s); delete c._aviso;
+  c.itens.forEach(function (i) { delete i._aberto; }); return c;
+}
+function iguais(a, b) { return JSON.stringify(semInternos(a)) === JSON.stringify(semInternos(b)); }
+
+// ------------------------------------------------------------ guarda no aparelho
+function abrirIdb() {
+  return new Promise(function (ok, nao) {
+    try {
+      var r = indexedDB.open("prancheta-aft", 1);
+      r.onupgradeneeded = function () { r.result.createObjectStore("estados"); };
+      r.onsuccess = function () { ok(r.result); };
+      r.onerror = function () { nao(r.error); };
+    } catch (e) { nao(e); }
+  });
+}
+function idbGet(k) { return abrirIdb().then(function (db) { return new Promise(function (ok, nao) {
+  var q = db.transaction("estados", "readonly").objectStore("estados").get(k);
+  q.onsuccess = function () { ok(q.result); }; q.onerror = function () { nao(q.error); }; }); }); }
+function idbPut(k, v) { return abrirIdb().then(function (db) { return new Promise(function (ok, nao) {
+  var t = db.transaction("estados", "readwrite"); t.objectStore("estados").put(v, k);
+  t.oncomplete = function () { ok(); }; t.onerror = function () { nao(t.error); }; }); }); }
+
+var tGravar = null, tArquivo = null;
+function mudou(it, campo) {
+  var agora = agoraIso();
+  if (it) it.atualizado_em = agora;
+  if (campo === "observacoes") estado.observacoes_em = agora;
+  if (campo === "carimbo") estado.carimbo.atualizado_em = agora;
+  estado.salvo_em = agora;
+  estado.salvo_por = "aparelho";
+  alteradoDepoisDeSalvar = true;
+  clearTimeout(tGravar);
+  tGravar = setTimeout(gravarNoAparelho, 400);
+  if (arquivoHandle && arquivoPermitido) { clearTimeout(tArquivo); tArquivo = setTimeout(function () { salvarNoArquivo(false); }, 2500); }
+  status();
+}
+function gravarNoAparelho() {
+  idbPut(chave(), semInternos(estado)).then(function () { guardaAparelho = "idb"; gravadoEm = new Date(); status(); })
+    .catch(function () {
+      try {
+        var leve = semInternos(estado);
+        leve.itens.forEach(function (it) { it.fotos_qtd = (it.fotos || []).length; it.fotos = []; });
+        localStorage.setItem(chave(), JSON.stringify(leve));
+        guardaAparelho = "local";
+      } catch (e) { guardaAparelho = "nenhum"; }
+      gravadoEm = new Date(); status();
+    });
+}
+function status() {
+  var el = document.getElementById("status"), p = [];
+  if (PODE_GRAVAR_DIRETO) {
+    if (arquivoHandle && arquivoPermitido)
+      p.push(alteradoDepoisDeSalvar ? "Salvando no arquivo da pasta da OS…" :
+        "✓ Salvo no arquivo da pasta da OS" + (salvoNoArquivoEm ? " às " + hhmm(salvoNoArquivoEm) : "") + ".");
+    else p.push(arquivoHandle ? "Clique em Salvar arquivo para voltar a salvar sozinho na pasta da OS." :
+      "Clique em Salvar arquivo e escolha este mesmo arquivo na pasta da OS: daí em diante salvo sozinho.");
+    if (gravadoEm) p.push("Cópia neste computador às " + hhmm(gravadoEm) + ".");
+  } else {
+    if (guardaAparelho === "idb") p.push(gravadoEm ? "✓ Guardado neste celular às " + hhmm(gravadoEm) + "." :
+      (alteradoDepoisDeSalvar ? "Guardando neste celular…" : "Pronta. O que marcar fica guardado neste celular."));
+    else if (guardaAparelho === "local") p.push("⚠ O celular só está guardando o texto. Salve o arquivo após cada foto.");
+    else p.push("⚠ Este celular não está guardando nada. Use Salvar arquivo com frequência.");
+    p.push(alteradoDepoisDeSalvar ? "Arquivo ainda não salvo com as últimas mudanças." :
+      (exportadoEm ? "Arquivo salvo às " + hhmm(exportadoEm) + "." : ""));
+  }
+  el.textContent = p.join(" ");
+}
+
+// ------------------------------------------------------------ carimbo
+function dataExif(buf) {
+  try {
+    var v = new DataView(buf);
+    if (v.getUint16(0) !== 0xFFD8) return null;
+    var o = 2;
+    while (o < v.byteLength - 4) {
+      var m = v.getUint16(o), len = v.getUint16(o + 2);
+      if (m === 0xFFE1 && v.getUint32(o + 4) === 0x45786966) {
+        var t = o + 10, le = v.getUint16(t) === 0x4949;
+        var u16 = function (p) { return v.getUint16(p, le); }, u32 = function (p) { return v.getUint32(p, le); };
+        var ifd = function (off) { var n = u16(t + off), r = {};
+          for (var i = 0; i < n; i++) { var e = t + off + 2 + i * 12; r[u16(e)] = {count: u32(e + 4), val: e + 8}; }
+          return r; };
+        var i0 = ifd(u32(t + 4)), tag = null;
+        if (i0[0x8769]) { var ex = ifd(u32(i0[0x8769].val)); tag = ex[0x9003] || ex[0x9004]; }
+        tag = tag || i0[0x0132];
+        if (!tag) return null;
+        var p = tag.count > 4 ? t + u32(tag.val) : tag.val, s = "";
+        for (var i = 0; i < 19; i++) s += String.fromCharCode(v.getUint8(p + i));
+        var mm = s.match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+        if (!mm) return null;
+        return new Date(+mm[1], +mm[2] - 1, +mm[3], +mm[4], +mm[5], +mm[6]);
+      }
+      if ((m & 0xFF00) !== 0xFF00) break;
+      o += 2 + len;
+    }
+  } catch (e) {}
+  return null;
+}
+var FONTE = 'Roboto, "Segoe UI", Arial, sans-serif';
+var AZUL = "#1e4c8a", AZUL_LOGO = "#163b6a";
+function textoEspalhado(ctx, txt, x, y, largura) {
+  var larg = [], soma = 0;
+  for (var i = 0; i < txt.length; i++) { var w = ctx.measureText(txt[i]).width; larg.push(w); soma += w; }
+  var folga = txt.length > 1 ? (largura - soma) / (txt.length - 1) : 0, xx = x;
+  for (var j = 0; j < txt.length; j++) { ctx.fillText(txt[j], xx, y); xx += larg[j] + folga; }
+}
+function fonteQueCabe(ctx, txt, peso, tamanho, largura) {
+  ctx.font = peso + " " + tamanho + "px " + FONTE;
+  var w = ctx.measureText(txt).width;
+  if (w > largura) { tamanho = tamanho * largura / w; ctx.font = peso + " " + tamanho + "px " + FONTE; }
+  return tamanho;
+}
+function desenharCarimbo(ctx, W, H, quando) {
+  var c = estado.carimbo || {};
+  var k = Math.min(W, H) / 1500;
+  ctx.save();
+  ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
+  ctx.shadowColor = "rgba(255,255,255,0.65)"; ctx.shadowBlur = 5 * k;
+  var x0 = 48 * k, topo = 35 * k;
+  ctx.fillStyle = AZUL_LOGO;
+  ctx.font = "900 " + (98 * k) + "px " + FONTE;
+  var wAft = ctx.measureText("AFT").width;
+  ctx.fillText("AFT", x0, topo + 70 * k);
+  var yRegua = topo + 75 * k;
+  ctx.fillRect(x0, yRegua, wAft, 3.5 * k);
+  fonteQueCabe(ctx, "AUDITORIA-FISCAL", "700", 17 * k, wAft);
+  ctx.fillText("AUDITORIA-FISCAL", x0, yRegua + 21 * k);
+  ctx.font = "700 " + (15.5 * k) + "px " + FONTE;
+  textoEspalhado(ctx, "DO TRABALHO", x0, yRegua + 39 * k, wAft);
+  ctx.fillStyle = AZUL;
+  var xt = x0 + wAft + 25 * k, largMax = W - xt - 20 * k;
+  [c.titulo || "Registro Fotográfico de Inspeção", c.nome || "", c.cargo_cif || ""].forEach(function (t, i) {
+    fonteQueCabe(ctx, t, "700", 29 * k, largMax);
+    ctx.fillText(t, xt, topo + 27 * k + i * 38 * k);
+  });
+  var yb = H - 35 * k, dt = fmtData(quando);
+  ctx.font = "700 " + (37 * k) + "px " + FONTE;
+  ctx.fillText(dt, 20 * k, yb);
+  var wDt = ctx.measureText(dt).width;
+  var nome = String(c.estabelecimento || "").toUpperCase();
+  var disp = W - 18 * k - (20 * k + wDt + 40 * k);
+  var tam = fonteQueCabe(ctx, nome, "700", 37 * k, disp);
+  ctx.textAlign = "right";
+  if (tam < 22 * k) {
+    ctx.font = "700 " + (30 * k) + "px " + FONTE;
+    var palavras = nome.split(" "), l1 = "", l2 = "";
+    palavras.forEach(function (p) { var teste = (l1 ? l1 + " " : "") + p;
+      if (!l2 && ctx.measureText(teste).width <= W - 38 * k) l1 = teste; else l2 = (l2 ? l2 + " " : "") + p; });
+    fonteQueCabe(ctx, l2, "700", 30 * k, W - 38 * k);
+    ctx.fillText(l2, W - 18 * k, yb - 50 * k);
+    fonteQueCabe(ctx, l1, "700", 30 * k, W - 38 * k);
+    ctx.fillText(l1, W - 18 * k, yb - 88 * k);
+  } else {
+    ctx.fillText(nome, W - 18 * k, yb);
+  }
+  ctx.restore();
+}
+function carimbar(origem, quando) {
+  var lado = 1600, w = origem.width, h = origem.height, f = Math.min(1, lado / Math.max(w, h));
+  var W = Math.round(w * f), H = Math.round(h * f);
+  var cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  var ctx = cv.getContext("2d");
+  ctx.drawImage(origem, 0, 0, W, H);
+  desenharCarimbo(ctx, W, H, quando);
+  return cv.toDataURL("image/jpeg", 0.85);
+}
+function carregarImagem(arquivo) {
+  if (window.createImageBitmap) return createImageBitmap(arquivo).catch(function () { return viaImg(arquivo); });
+  return viaImg(arquivo);
+}
+function viaImg(arquivo) { return new Promise(function (ok, nao) {
+  var img = new Image(); img.onload = function () { ok(img); }; img.onerror = nao;
+  img.src = URL.createObjectURL(arquivo); }); }
+function adicionarFoto(it, arquivo) {
+  return arquivo.arrayBuffer().then(function (buf) {
+    var quando = dataExif(buf), origem = "exif";
+    if (!quando && arquivo.lastModified) { quando = new Date(arquivo.lastModified); origem = "arquivo"; }
+    if (!quando) { quando = new Date(); origem = "agora"; }
+    return carregarImagem(arquivo).then(function (img) {
+      it.fotos.push({id: "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        data: carimbar(img, quando), quando: fmtData(quando), origem_hora: origem, legenda: ""});
+    });
+  });
+}
+function escolherFoto(id, camera) {
+  var inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*";
+  if (camera) inp.setAttribute("capture", "environment"); else inp.multiple = true;
+  inp.onchange = function () {
+    var it = item(id); if (!it || !inp.files.length) return;
+    toast("Carimbando…", 1500);
+    var fila = Array.prototype.slice.call(inp.files), p = Promise.resolve();
+    fila.forEach(function (f) { p = p.then(function () { return adicionarFoto(it, f); }); });
+    p.then(function () { mudou(it); render(); toast(fila.length > 1 ? fila.length + " fotos carimbadas." : "Foto carimbada."); })
+     .catch(function () { toast("Não consegui abrir essa imagem.", 3500); });
+  };
+  inp.click();
+}
+
+// ------------------------------------------------------------ tela
+function vivos() { return estado.itens.filter(function (i) { return !i.apagado; }); }
+function semDesfecho(it) { return !Object.keys(it.desfechos || {}).length; }
+function contar() {
+  var c = {tot: 0, feitos: 0, irr: 0, semDesf: 0, duv: 0, acresc: 0};
+  vivos().forEach(function (it) {
+    if (it.origem === "os") { c.tot++; if (it.situacao) c.feitos++; } else c.acresc++;
+    if (it.situacao === "irregular") { c.irr++; if (semDesfecho(it)) c.semDesf++; }
+    if (it.duvida) c.duv++;
+  });
+  return c;
+}
+// Ementa do cartão, logo abaixo da descrição, SEMPRE editável pela AFT (em
+// qualquer cartão). Vale, nesta ordem: o enquadramento (dela ou do assistente);
+// a ementa da OS; a ementa indicada na constatação. Gradação sempre junto (regra
+// da AFT). O texto, a gradação e a capitulação vêm do ementário oficial embutido
+// no arquivo (ementas em vigor), para funcionar sem internet.
+function rotGrad(g) {
+  if (!g) return "Gradação não informada";
+  return g === "sem gradação" ? "Sem gradação" : "Gradação " + esc(g);
+}
+var EMENTARIO = null;
+function ementario() {
+  if (EMENTARIO) return EMENTARIO;
+  try { EMENTARIO = JSON.parse(document.getElementById("ementario-prancheta").textContent || "{}"); }
+  catch (e) { EMENTARIO = {}; }
+  EMENTARIO.ementas = EMENTARIO.ementas || {};
+  return EMENTARIO;
+}
+function formatarCodigo(v) {
+  var d = String(v || "").replace(/\D/g, "");
+  return d.length === 7 ? d.slice(0, 6) + "-" + d.slice(6) : null;
+}
+function ementaAtual(it) {
+  var e = it.enquadramento;
+  if (e && e.codigo) return e;
+  var cod = it.codigo; if (!cod) return null;
+  var x = ementario().ementas[cod];
+  if (it.origem === "os") return {codigo: cod, gradacao: it.gradacao || (x ? x[0] : ""),
+    descricao: it.descricao || (x ? x[2] : ""), capitulacao: x ? x[3] : ""};
+  return x ? {codigo: cod, gradacao: x[0], descricao: x[2], capitulacao: x[3]}
+           : {codigo: cod, gradacao: "", descricao: "", capitulacao: "", naoAchou: true};
+}
+function trocarEmenta(it, valor) {
+  var bruto = String(valor || "").trim(), atual = ementaAtual(it), agora = agoraIso();
+  if (!bruto) {                         // apagou: a da OS volta; a constatação fica sem ementa
+    if (!atual) return;
+    if (it.origem !== "os") it.codigo = "";
+    it.enquadramento = {codigo: "", por: "AFT", em: hoje(), em_iso: agora};
+    mudou(it); render(); return;
+  }
+  var cod = formatarCodigo(bruto);
+  if (!cod) { toast("A ementa tem 7 dígitos: 000000-0.", 3500); render(); return; }
+  if (atual && atual.codigo === cod) { render(); return; }
+  var x = ementario().ementas[cod];
+  if (it.origem === "os" && cod === it.codigo)   // voltou à ementa da OS
+    it.enquadramento = {codigo: "", por: "AFT", em: hoje(), em_iso: agora};
+  else
+    it.enquadramento = {codigo: cod, gradacao: x ? x[0] : "", descricao: x ? x[2] : "",
+      capitulacao: x ? x[3] : "", nota: x ? "" : "Ementa não encontrada entre as em vigor guardadas na prancheta: conferir o código.",
+      por: "AFT", em: hoje(), em_iso: agora};
+  if (it.origem !== "os") it.codigo = cod;
+  mudou(it); render();
+  if (!x) toast("Não achei a ementa " + cod + " entre as em vigor. Confira o código.", 4500);
+}
+function blocoEmenta(it) {
+  var e = ementaAtual(it);
+  var h = '<div class="enq"><div class="linha-ementa"><label class="rot3" for="em-' + esc(it.id) + '">Ementa</label>'
+    + '<input type="text" class="cod-ementa" id="em-' + esc(it.id) + '" data-campo="ementa" inputmode="numeric" enterkeyhint="done" placeholder="000000-0" value="'
+    + esc(e ? e.codigo : "") + '" aria-label="Ementa (pode trocar)">'
+    + (e ? "<b>" + rotGrad(e.gradacao) + "</b>" : "") + "</div>";
+  if (!e) return h + '<div class="cap">Digite a ementa, se souber. Pode trocar a qualquer momento.</div></div>';
+  if (it.origem === "os" && e.codigo !== it.codigo) h += '<div class="cap">Ementa alterada; a da OS é ' + esc(it.codigo) + ". Para voltar, apague o campo.</div>";
+  if (e.naoAchou) h += '<div class="cap alerta">Não achei esta ementa entre as em vigor guardadas na prancheta. Confira o código.</div>';
+  h += '<div class="desc" data-acao="expandir">' + esc(e.descricao || "") + "</div>";
+  if (e.capitulacao) h += '<div class="cap">' + esc(e.capitulacao) + "</div>";
+  if (e.nota) h += '<div class="cap' + (/não encontrada/.test(e.nota) ? " alerta" : "") + '">' + esc(e.nota) + "</div>";
+  return h + "</div>";
+}
+// Mesmo padrão em todos os cartões (decisão da AFT, 06/10/2026): descrição,
+// ementa e, depois, os botões; tudo sempre à mostra.
+function cartao(it) {
+  it.fotos = it.fotos || []; it.documentos = it.documentos || [];
+  var h = '<div class="cartao" data-id="' + esc(it.id) + '" data-sit="' + esc(it.situacao || "") + '" data-duvida="' + it.duvida + '">';
+  h += '<div class="topo"><div class="tit"><span class="cod">' + (it.origem === "os" ? "Ementa da OS" : "Constatação") + "</span>";
+  if (it.duvida) h += '<span class="marca-duvida">Pendente de Confirmação</span>';
+  h += '</div><button class="duvida" type="button" data-acao="duvida" aria-pressed="' + it.duvida
+    + '" title="Não tenho certeza de que é infração" aria-label="Marcar como Pendente de Confirmação">?</button></div>';
+  h += '<label class="rot">' + (it.tipo === "documental" ? "O que constatei" : "O que vi") + '</label><textarea data-campo="relato" placeholder="Descreva a constatação">' + esc(it.relato || "") + "</textarea>";
+  if (it.tipo === "documental")
+    h += '<label class="rot">Documento analisado</label><input type="text" data-campo="documento" placeholder="Ex.: prontuário do vaso de pressão, pág. 3" value="' + esc(it.documento || "") + '">';
+  h += blocoEmenta(it);
+  var opcoes = it.origem === "os" ? ["os", "inspecao", "documental"] : ["inspecao", "documental"];
+  h += '<div class="tipos"><span class="rot2">Tipo:</span>' + opcoes.map(function (v) {
+    return '<button type="button" data-acao="tipo" data-v="' + v + '" aria-pressed="' + (it.tipo === v) + '" title="' + TIPOS[v] + '" aria-label="' + TIPOS[v] + '">' + TIPOS_CURTO[v] + "</button>"; }).join("") + "</div>";
+  if (it.constatado_em) h += '<div class="quando">' + (it.origem === "os" ? "Verificada em " : "Constatada em ") + esc(it.constatado_em) + "</div>";
+  h += '<div class="sits">' + SITS.map(function (s) {
+    return '<button type="button" data-acao="situacao" data-v="' + s[0] + '" aria-pressed="' + (it.situacao === s[0]) + '">' + s[1] + "</button>"; }).join("") + "</div>";
+  if (it.situacao === "irregular") {
+    var df = it.desfechos || {};
+    h += '<div class="desfechos"><span class="rot2">Desfecho (SFIT-WEB), pode marcar mais de um:</span><div class="grade">'
+      + DESFECHOS.map(function (d) { var em = df[d[0]];
+        return '<button type="button" data-acao="desfecho" data-v="' + d[0] + '" aria-pressed="' + !!em + '">' + d[1]
+          + (em ? "<small>" + esc(em) + "</small>" : "") + "</button>"; }).join("") + "</div></div>";
+  }
+  h += '<div class="acoes"><button class="btn" type="button" data-acao="foto">📷 Foto</button>';
+  h += '<button class="btn" type="button" data-acao="doc-anexar">📎 Documento</button>';   // em todos os cartões (decisão da AFT)
+  if (it.origem !== "os") h += '<button class="btn perigo" type="button" data-acao="apagar-item">Apagar</button>';
+  h += "</div>";
+  var docs = it.documentos.filter(function (d) { return !d.apagado; });
+  if (docs.length) h += '<div class="docs">' + docs.map(function (d) {
+    return '<div class="doc" data-doc="' + esc(d.id) + '"><button class="nome" type="button" data-acao="doc-abrir">📄 ' + esc(d.nome)
+      + '</button><span class="tam">' + esc(tamanhoTxt(d.tamanho)) + '</span><button class="tirar" type="button" data-acao="doc-tirar" aria-label="Remover documento">×</button></div>'; }).join("") + "</div>";
+  var fotosVivas = it.fotos.filter(function (f) { return !f.apagado; });
+  if (fotosVivas.length) h += '<div class="fotos">' + fotosVivas.map(function (f) {
+    return '<figure data-foto="' + esc(f.id) + '"><img src="' + f.data + '" alt="Foto carimbada" data-acao="ver-foto"><figcaption>' + esc(f.legenda || f.quando) + "</figcaption></figure>"; }).join("") + "</div>";
+  return h + "</div>";
+}
+function passaFiltro(it) {
+  if (filtro === "pendentes") return !it.situacao;
+  if (filtro === "irregulares") return it.situacao === "irregular";
+  if (filtro === "sem_desfecho") return it.situacao === "irregular" && semDesfecho(it);
+  if (filtro === "duvida") return it.duvida;
+  return true;
+}
+function render() {
+  var c = contar();
+  // Barra de cima compacta (pedido da AFT, 06/10/2026): uma linha com OS, RI e
+  // empresa; outra com a contagem.
+  var tit = document.getElementById("titulo");
+  tit.innerHTML = "<b>OS " + esc(estado.os || "") + "</b>" + (estado.ri ? " · RI " + esc(estado.ri) : "")
+    + (estado.empresa ? " · " + esc(estado.empresa) : "");
+  tit.title = (estado.empresa || "") + (estado.ri ? " · RI " + estado.ri : "");
+  document.getElementById("progresso").style.width = (c.tot ? Math.round(100 * c.feitos / c.tot) : 0) + "%";
+  document.getElementById("contagem").textContent = c.feitos + "/" + c.tot + " marcadas · "
+    + c.irr + " irregulares" + (c.irr ? " (" + c.semDesf + " sem desfecho)" : "") + " · " + c.duv + " pendente(s) de confirmação";
+  var h = estado._aviso ? '<div class="aviso">' + esc(estado._aviso) + "</div>" : "";
+  // Informações gerais no alto (pedido da AFT, 09/10/2026): entrevistas,
+  // contatos, e-mails. É o antigo "Observações gerais" do fim da página, com o
+  // mesmo campo por dentro (observacoes), para o texto já escrito não se perder.
+  h += "<h2>Informações gerais</h2>";
+  h += '<textarea class="info-gerais" data-campo="observacoes" placeholder="Entrevistas, contatos (nome, cargo, e-mail, telefone), horários e outras anotações da fiscalização">' + esc(estado.observacoes) + "</textarea>";
+  h += "<h2>Ementas e constatações</h2>";
+  h += '<div class="filtros">' + [["todas", "Todas"], ["pendentes", "Pendentes"], ["irregulares", "Irregulares"], ["sem_desfecho", "Sem desfecho"], ["duvida", "Pendente de Confirmação"]].map(function (f) {
+    return '<button type="button" data-acao="filtro" data-v="' + f[0] + '" aria-pressed="' + (filtro === f[0]) + '">' + f[1] + "</button>"; }).join("") + "</div>";
+  h += '<div class="acoes"><button class="btn cheio" type="button" data-acao="nova">＋ Nova constatação</button></div>';
+  // Constatações acrescentadas no alto, a mais recente primeiro, logo abaixo do
+  // botão; depois as ementas da OS, na ordem da OS.
+  var vis = vivos().filter(passaFiltro);
+  vis = vis.filter(function (i) { return i.origem !== "os"; }).reverse()
+    .concat(vis.filter(function (i) { return i.origem === "os"; }));
+  h += vis.length ? vis.map(cartao).join("") : '<p class="vazio">Nada neste filtro.</p>';
+  h += '<details class="config"><summary>Nome do estabelecimento no carimbo</summary>'
+    + '<input type="text" data-campo="estabelecimento" value="' + esc(estado.carimbo.estabelecimento || "") + '"></details>';
+  app.innerHTML = h;
+  status();
+}
+
+// ------------------------------------------------------------ eventos
+app.addEventListener("click", function (ev) {
+  var alvo = ev.target.closest("[data-acao]"); if (!alvo) return;
+  var acao = alvo.getAttribute("data-acao");
+  var card = alvo.closest(".cartao"), it = card ? item(card.getAttribute("data-id")) : null;
+  if (acao === "filtro") { filtro = alvo.getAttribute("data-v"); render(); return; }
+  if (acao === "expandir") { alvo.classList.toggle("aberta"); return; }
+  if (acao === "situacao" && it) {
+    var v = alvo.getAttribute("data-v"); it.situacao = it.situacao === v ? "" : v;
+    if (it.situacao && !it.constatado_em) it.constatado_em = hoje();
+    mudou(it); render(); return; }
+  if (acao === "desfecho" && it) {
+    var k = alvo.getAttribute("data-v"); it.desfechos = it.desfechos || {};
+    if (it.desfechos[k]) delete it.desfechos[k]; else it.desfechos[k] = hoje();
+    mudou(it); render(); return; }
+  if (acao === "foto" && it) { menuFotoId = it.id; document.getElementById("menu-foto").showModal(); return; }
+  if (acao === "doc-anexar" && it) { escolherDocumento(it.id); return; }
+  if ((acao === "doc-abrir" || acao === "doc-tirar") && it) {
+    var did = alvo.closest(".doc").getAttribute("data-doc");
+    var d = it.documentos.filter(function (x) { return x.id === did; })[0]; if (!d) return;
+    if (acao === "doc-abrir") abrirDocumento(d);
+    else if (confirm("Remover o documento " + d.nome + "?")) {
+      it.documentos = it.documentos.map(function (x) { return x.id === did ? {id: did, apagado: true} : x; });
+      mudou(it); render(); }
+    return; }
+  if (acao === "ver-foto" && it) { abrirVisor(it, alvo.closest("figure").getAttribute("data-foto")); return; }
+  if (acao === "apagar-item" && it) {
+    if (confirm("Apagar esta constatação e as fotos dela?")) { it.apagado = true; it.fotos = []; mudou(it); render(); }
+    return; }
+  if (acao === "tipo" && it) { it.tipo = alvo.getAttribute("data-v"); mudou(it); render(); return; }
+  if (acao === "duvida" && it) { it.duvida = !it.duvida; mudou(it); render(); return; }
+  if (acao === "nova") {
+    var novo = {id: "c" + Date.now().toString(36), origem: "campo", tipo: "inspecao", duvida: false,
+      codigo: "", descricao: "", grupo: "", situacao: "irregular", relato: "", documento: "", fotos: [],
+      documentos: [], desfechos: {}, constatado_em: hoje(), enquadramento: null};
+    estado.itens.push(novo); filtro = "todas"; mudou(novo); render();
+    var card = app.querySelector('.cartao[data-id="' + novo.id + '"]');
+    if (card) { card.scrollIntoView({block: "start", behavior: "smooth"}); var el = card.querySelector("textarea"); if (el) el.focus({preventScroll: true}); }
+  }
+});
+app.addEventListener("input", function (ev) {
+  var campo = ev.target.getAttribute("data-campo"); if (!campo || campo === "ementa") return;   // ementa: ao sair do campo
+  if (campo === "observacoes") { estado.observacoes = ev.target.value; mudou(null, "observacoes"); return; }
+  if (campo === "estabelecimento") { estado.carimbo.estabelecimento = ev.target.value; mudou(null, "carimbo"); return; }
+  var card = ev.target.closest(".cartao"), it = card && item(card.getAttribute("data-id"));
+  if (it) { it[campo] = ev.target.value; mudou(it); }
+});
+// Troca da ementa: vale quando a AFT sai do campo ou toca em OK/Enter.
+app.addEventListener("change", function (ev) {
+  if (ev.target.getAttribute("data-campo") !== "ementa") return;
+  var card = ev.target.closest(".cartao"), it = card && item(card.getAttribute("data-id"));
+  if (it) trocarEmenta(it, ev.target.value);
+});
+app.addEventListener("keydown", function (ev) {
+  if (ev.key === "Enter" && ev.target.getAttribute("data-campo") === "ementa") { ev.preventDefault(); ev.target.blur(); }
+});
+// Documentos (em qualquer cartão): PDF, imagem, Word, Excel, texto. Ficam dentro
+// da prancheta, como as fotos, sem carimbo. Limite por documento: 15 MB.
+var LIMITE_DOC = 15 * 1024 * 1024;
+function tamanhoTxt(n) { n = n || 0; return n >= 1048576 ? (n / 1048576).toFixed(1).replace(".", ",") + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+function lerComoDataUrl(arq) { return new Promise(function (ok, nao) {
+  var r = new FileReader(); r.onload = function () { ok(r.result); }; r.onerror = function () { nao(r.error); }; r.readAsDataURL(arq); }); }
+function escolherDocumento(id) {
+  var inp = document.createElement("input");
+  inp.type = "file"; inp.multiple = true;
+  inp.accept = ".pdf,.jpg,.jpeg,.png,.webp,.heic,.doc,.docx,.xls,.xlsx,.odt,.ods,.csv,.txt,application/pdf,image/*";
+  inp.onchange = function () {
+    var it = item(id); if (!it || !inp.files.length) return;
+    var fila = Array.prototype.slice.call(inp.files), grandes = [], p = Promise.resolve(), n = 0;
+    fila.forEach(function (f) {
+      if (f.size > LIMITE_DOC) { grandes.push(f.name + " (" + tamanhoTxt(f.size) + ")"); return; }
+      p = p.then(function () { return lerComoDataUrl(f); }).then(function (url) {
+        it.documentos.push({id: "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          nome: f.name, tipo: f.type || "", tamanho: f.size, data: url, quando: fmtData(new Date())});
+        n++; });
+    });
+    p.then(function () {
+      if (n) { mudou(it); render(); }
+      if (grandes.length) toast("Acima de 15 MB, não anexei: " + grandes.join(", ") + ". Guarde na pasta da OS e cite no campo Documento analisado.", 6000);
+      else if (n) toast(n > 1 ? n + " documentos anexados." : "Documento anexado.");
+    }).catch(function () { toast("Não consegui ler esse arquivo.", 3500); });
+  };
+  inp.click();
+}
+function abrirDocumento(d) {
+  try {
+    var partes = String(d.data).split(","), bin = atob(partes[1] || ""), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    var url = URL.createObjectURL(new Blob([bytes], {type: d.tipo || "application/octet-stream"}));
+    var w = window.open(url, "_blank");
+    if (!w) { var a = document.createElement("a"); a.href = url; a.download = d.nome; document.body.appendChild(a); a.click(); a.remove(); }
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  } catch (e) { toast("Não consegui abrir esse documento.", 3500); }
+}
+// Menu da foto: câmera ou galeria. O clique na opção é o gesto que o navegador
+// exige para abrir a câmera ou a galeria.
+var menuFotoId = null;
+document.getElementById("menu-foto").addEventListener("click", function (ev) {
+  var dlg = document.getElementById("menu-foto");
+  var a = ev.target.closest("[data-acao]");
+  if (!a) { if (ev.target === dlg) dlg.close(); return; }   // toque fora do menu fecha
+  var acao = a.getAttribute("data-acao"), id = menuFotoId;
+  dlg.close(); menuFotoId = null;
+  if (acao === "menu-camera" && id) escolherFoto(id, true);
+  else if (acao === "menu-galeria" && id) escolherFoto(id, false);
+});
+var visorAtual = null;
+function abrirVisor(it, fid) {
+  var f = it.fotos.filter(function (x) { return x.id === fid; })[0]; if (!f) return;
+  visorAtual = {it: it, f: f};
+  document.getElementById("visor-img").src = f.data;
+  document.getElementById("visor-legenda").value = f.legenda || "";
+  document.getElementById("visor").showModal();
+}
+document.getElementById("visor").addEventListener("click", function (ev) {
+  var a = ev.target.closest("[data-acao]"); if (!a || !visorAtual) return;
+  if (a.getAttribute("data-acao") === "visor-ok") {
+    visorAtual.f.legenda = document.getElementById("visor-legenda").value; mudou(visorAtual.it);
+  } else if (a.getAttribute("data-acao") === "visor-apagar") {
+    if (!confirm("Apagar esta foto?")) return;
+    var fid = visorAtual.f.id;
+    visorAtual.it.fotos = visorAtual.it.fotos.map(function (x) { return x.id === fid ? {id: fid, apagado: true} : x; }); mudou(visorAtual.it);
+  }
+  document.getElementById("visor").close(); visorAtual = null; render();
+});
+
+// ------------------------------------------------------------ arquivo
+function htmlCom(s) {
+  var json = JSON.stringify(semInternos(s)).replace(/<\//g, "<\\/");
+  var corpo = PRISTINE.indexOf(MARCA) + MARCA.length, fim = PRISTINE.indexOf("<\/script>", corpo);
+  return PRISTINE.slice(0, corpo) + json + PRISTINE.slice(fim);
+}
+function dadosDoHtml(texto) {
+  var i = texto.indexOf(MARCA); if (i < 0) return null;
+  var c = i + MARCA.length, f = texto.indexOf("<\/script>", c);
+  try { return normalizar(JSON.parse(texto.slice(c, f))); } catch (e) { return null; }
+}
+function nomeArquivo() { return "prancheta-OS" + String(estado.os || "").replace(/\D/g, "") + ".html"; }
+
+// Computador: grava direto no arquivo da pasta da OS. Antes de gravar, relê o
+// arquivo e junta: o que o assistente gravou nele (enquadramento, constatação
+// nova) entra na tela em vez de ser apagado.
+function salvarNoArquivo(comClique) {
+  if (!arquivoHandle) return Promise.resolve(false);
+  var pedir = comClique && arquivoHandle.requestPermission ? arquivoHandle.requestPermission({mode: "readwrite"})
+    : (arquivoHandle.queryPermission ? arquivoHandle.queryPermission({mode: "readwrite"}) : Promise.resolve("granted"));
+  return pedir.then(function (p) {
+    arquivoPermitido = p === "granted";
+    if (!arquivoPermitido) { status(); return false; }
+    return arquivoHandle.getFile().then(function (f) { return f.text(); }).then(function (texto) {
+      var doArquivo = texto ? dadosDoHtml(texto) : null;
+      if (doArquivo && (doArquivo.os !== estado.os || doArquivo.ri !== estado.ri)) {
+        toast("Esse arquivo é de outra OS. Nada foi gravado nele.", 5000); arquivoHandle = null; arquivoPermitido = false; status(); return false;
+      }
+      if (doArquivo) {
+        var junto = mesclar(estado, doArquivo);
+        if (!iguais(junto, estado)) { var abertos = {}; estado.itens.forEach(function (i) { if (i._aberto) abertos[i.id] = 1; });
+          junto.itens.forEach(function (i) { if (abertos[i.id]) i._aberto = true; });
+          estado = junto; if (!document.activeElement || document.activeElement.tagName === "BODY") render(); }
+        if (!alteradoDepoisDeSalvar && iguais(estado, doArquivo)) {   // nada novo dos dois lados
+          salvoNoArquivoEm = salvoNoArquivoEm || new Date(); status(); return true; }
+      }
+      return arquivoHandle.createWritable().then(function (w) {
+        return w.write(htmlCom(estado)).then(function () { return w.close(); });
+      }).then(function () {
+        salvoNoArquivoEm = new Date(); alteradoDepoisDeSalvar = false; gravarNoAparelho(); status(); return true;
+      });
+    });
+  }).catch(function () { toast("Não consegui gravar no arquivo. Tente Salvar arquivo de novo.", 4000); return false; });
+}
+function escolherArquivo() {
+  return window.showSaveFilePicker({suggestedName: nomeArquivo(),
+    types: [{description: "Prancheta", accept: {"text/html": [".html"]}}]}).then(function (h) {
+    arquivoHandle = h; arquivoPermitido = true;
+    idbPut("arquivo|" + chave(), h).catch(function () {});
+    return salvarNoArquivo(false);
+  }).catch(function (e) { if (!e || e.name !== "AbortError") toast("Não consegui abrir o arquivo para gravar.", 4000); });
+}
+// Celular: compartilhar (OneDrive) ou baixar.
+function exportar() {
+  var arq = new File([htmlCom(estado)], nomeArquivo(), {type: "text/html"});
+  var concluir = function () { exportadoEm = new Date(); alteradoDepoisDeSalvar = false; status(); };
+  if (navigator.canShare && navigator.share) {
+    try {
+      if (navigator.canShare({files: [arq]})) {
+        navigator.share({files: [arq], title: arq.name}).then(concluir).catch(function (e) {
+          if (!e || e.name !== "AbortError") baixar(arq, concluir); });
+        return;
+      }
+    } catch (e) {}
+  }
+  baixar(arq, concluir);
+}
+function baixar(arq, concluir) {
+  var a = document.createElement("a"); a.href = URL.createObjectURL(arq); a.download = arq.name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+  concluir(); toast("Arquivo salvo em Downloads: " + arq.name, 4000);
+}
+document.getElementById("btn-salvar").addEventListener("click", function () {
+  if (!PODE_GRAVAR_DIRETO) { exportar(); return; }
+  if (arquivoHandle) salvarNoArquivo(true).then(function (ok) { if (ok) toast("Salvo no arquivo da pasta da OS."); else if (!arquivoHandle) escolherArquivo(); });
+  else escolherArquivo();
+});
+// Ao voltar para a janela no computador, relê o arquivo (o assistente pode ter gravado nele).
+window.addEventListener("focus", function () { if (arquivoHandle && arquivoPermitido && !alteradoDepoisDeSalvar) salvarNoArquivo(false); });
+
+// ------------------------------------------------------------ partida
+// Junta o que está no arquivo com o que estava guardado neste aparelho.
+idbGet(chave()).then(function (guardado) {
+  if (guardado) {
+    var junto = mesclar(estado, normalizar(guardado));
+    if (!iguais(junto, estado)) {
+      estado = junto;
+      estado._aviso = "Juntei o arquivo com o que estava guardado neste aparelho (" + hhmm(new Date(ts(guardado.salvo_em) || Date.now())) + "). "
+        + (PODE_GRAVAR_DIRETO ? "Clique em Salvar arquivo para levar tudo à pasta da OS." : "Salve o arquivo para levar essas mudanças à pasta da OS.");
+      alteradoDepoisDeSalvar = true;
+    }
+    gravadoEm = guardado.salvo_em ? new Date(ts(guardado.salvo_em)) : null;
+  }
+  guardaAparelho = "idb";
+  return PODE_GRAVAR_DIRETO ? idbGet("arquivo|" + chave()).then(function (h) {
+    if (h) { arquivoHandle = h; return h.queryPermission({mode: "readwrite"}).then(function (p) { arquivoPermitido = p === "granted"; }); }
+  }).catch(function () {}) : null;
+}).catch(function () {
+  try { localStorage.setItem("prancheta-teste", "1"); localStorage.removeItem("prancheta-teste"); guardaAparelho = "local"; }
+  catch (e) { guardaAparelho = "nenhum"; }
+}).then(render);
+
+// Acesso de conferência (usado nos testes da skill; não muda nada sozinho).
+window.__prancheta = {estado: function () { return estado; }, carimbar: carimbar, htmlCom: htmlCom,
+  mesclar: mesclar, dadosDoHtml: dadosDoHtml,
+  adicionarFoto: function (id, arquivo) { var it = item(id);
+    return adicionarFoto(it, arquivo).then(function () { mudou(it); render(); }); }};
+})();
+</script>
+</body>
+</html>
