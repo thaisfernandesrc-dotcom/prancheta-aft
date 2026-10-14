@@ -11,7 +11,7 @@
 //  - "prancheta-aft": as marcações, que o arquivo da prancheta grava sozinho a
 //    cada toque (é o mesmo banco que ele usa aberto direto no navegador).
 // Nada vai a servidor nenhum.
-var VERSAO = "2026.10.14-1342";
+var VERSAO = "2026.10.14-1621";
 var MARCA = '<script id="dados-prancheta" type="application/json">';
 var MARCA_EM = '<script id="ementario-prancheta" type="application/json">';
 var FIM = "<\/script>";
@@ -254,9 +254,14 @@ function esqueleto(h) {
   if (h.indexOf(MARCA) >= 0) h = trocarBloco(h, MARCA, "");
   return h;
 }
+// Data do código (<meta name="prancheta-codigo">): o app só troca por um código
+// MAIS NOVO que o do arquivo. Arquivo sem a data é de antes dela, logo mais velho.
+function versaoCodigo(h) { var m = String(h).match(/<meta name="prancheta-codigo" content="([^"]*)">/); return m ? m[1] : ""; }
 function comCodigoNovo(html) {
   return texto("modelo.html").then(function (modelo) {
     if (modelo.indexOf(MARCA) < 0 || modelo.indexOf(MARCA_EM) < 0) return html;
+    var vm = versaoCodigo(modelo), vf = versaoCodigo(html);
+    if (!vm || (vf && vf >= vm)) return html;   // nunca volta a um código mais antigo
     if (esqueleto(modelo) === esqueleto(html)) return html;
     var dados = blocoDe(html, MARCA); if (dados == null) return html;
     var em = blocoDe(html, MARCA_EM), titulo = (html.match(/<title>[^<]*<\/title>/) || [""])[0];
@@ -350,6 +355,8 @@ function ajustarDentro(fr, k) {
   // No computador, que grava sozinho no arquivo, vale cada nova hora gravada.
   var exportando = false, ultimo = "";
   if (btn) { btn.textContent = "Exportar"; btn.addEventListener("click", function () { exportando = true; }, true); }
+  var bs = doc.getElementById("btn-sincronizar");   // Sincronizar também leva à pasta da OS
+  if (bs) bs.addEventListener("click", function () { exportando = true; }, true);
   if (st) {
     var vigia = function () {
       var m = st.textContent.match(/(Arquivo salvo às|Salvo no arquivo da pasta da OS às) (\d\d:\d\d)/);

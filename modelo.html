@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
+<meta name="prancheta-codigo" content="2026-10-14T19:16:46Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Prancheta de Inspeção</title>
 <style>
@@ -118,6 +119,21 @@ dialog .corpo{padding:12px}
 #camera .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .18s}
 #camera .flash.on{opacity:.75;transition:none}
 .vazio{color:var(--suave);font-size:14px;margin:6px 0}
+.indicio-novo{display:flex;gap:8px;align-items:stretch}
+.indicio-novo input{flex:1}
+.indicios{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.indicio{display:flex;gap:6px;align-items:flex-start;background:#fffbea;border:1px solid #f0d58a;border-left:4px solid #d9a400;border-radius:8px;padding:6px}
+.indicio textarea{min-height:44px;flex:1;border:0;background:transparent;padding:6px;field-sizing:content}
+.ind-mais,.ind-tirar{flex:none;width:44px;height:44px;border-radius:8px;font-size:22px;font-weight:700;cursor:pointer;line-height:1}
+.ind-mais{border:1px solid var(--irregular);background:var(--irregular);color:#fff}
+.ind-tirar{border:1px solid var(--linha);background:#fff;color:var(--suave)}
+.ind-fotos{flex:none;align-self:center;font-size:13px;color:var(--suave);white-space:nowrap}
+.bandeja-todas{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 6px;font-size:14px;color:var(--suave)}
+.bandeja{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:8px}
+.foto-b{margin:0;background:var(--cartao);border:1px solid var(--linha);border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:5px}
+.foto-b img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;background:var(--fundo)}
+.foto-b figcaption{font-size:12px;color:var(--suave)}
+.foto-b select,.bandeja-todas select{min-height:40px;border:1px solid var(--linha);border-radius:8px;background:#fff;color:var(--texto);font:inherit;font-size:14px;padding:4px 6px;flex:1;min-width:0;width:100%}
 .toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:#17202b;color:#fff;padding:10px 14px;border-radius:8px;font-size:14px;z-index:9;max-width:90vw}
 details.config{margin-top:14px;font-size:14px}
 details.config summary{color:var(--suave);cursor:pointer}
@@ -132,6 +148,7 @@ details.config summary{color:var(--suave);cursor:pointer}
 <main id="app"></main>
 <div class="rodape">
   <div class="status" id="status">Carregando…</div>
+  <button class="btn" type="button" id="btn-sincronizar" hidden>⇅ Sincronizar</button>
   <button class="btn cheio" type="button" id="btn-salvar">Salvar arquivo</button>
 </div>
 <dialog id="visor"><img id="visor-img" alt="Foto ampliada"><div class="corpo">
@@ -192,9 +209,15 @@ var alteradoDepoisDeSalvar = false;
 var EH_CELULAR = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")
   || !!(navigator.userAgentData && navigator.userAgentData.mobile);
 var PODE_GRAVAR_DIRETO = typeof window.showSaveFilePicker === "function" && !EH_CELULAR;
+// Sincronizar (TESTE no celular, pedido da AFT em 14/10/2026): no celular a
+// gravação direta fica só no toque do botão, nunca sozinha a cada mudança.
+var SINCRONIA_CELULAR = EH_CELULAR;
 
 function normalizar(s) {
   s.itens = s.itens || []; s.observacoes = s.observacoes || ""; s.carimbo = s.carimbo || {};
+  s.indicios = Array.isArray(s.indicios) ? s.indicios : [];
+  s.indicios.forEach(function (x) { x.fotos = x.fotos || []; });
+  s.bandeja = Array.isArray(s.bandeja) ? s.bandeja : [];
   s.itens.forEach(function (it) {
     // tipo: "os" (padrão das ementas da OS), "inspecao" ou "documental"
     if (!it.tipo) it.tipo = it.origem === "os" ? (it.fase || "os") : (it.fase || "inspecao");
@@ -246,8 +269,91 @@ function mesclar(a, b) {
   r.observacoes_em = obsA ? a.observacoes_em : b.observacoes_em;
   var ca = a.carimbo || {}, cb = b.carimbo || {};
   r.carimbo = copia(ts(ca.atualizado_em) >= ts(cb.atualizado_em) ? ca : cb);
+  r.indicios = mesclarPorId(a.indicios, b.indicios);
+  r.bandeja = mesclarPorId(a.bandeja, b.bandeja);
   r.salvo_em = ts(a.salvo_em) >= ts(b.salvo_em) ? a.salvo_em : b.salvo_em;
   return normalizar(r);
+}
+// Indícios de irregularidade (pedido da AFT, 14/10/2026): fica o mais novo de
+// cada um. O descartado ("apagado") e o que virou constatação ("virou") ficam
+// marcados, para não voltarem pela junção com a outra versão.
+function mesclarPorId(a, b) {
+  var mapa = {}, ordem = [];
+  (a || []).concat(b || []).forEach(function (x) {
+    if (!mapa[x.id]) { mapa[x.id] = copia(x); ordem.push(x.id); }
+    else if (ts(x.atualizado_em) > ts(mapa[x.id].atualizado_em)) mapa[x.id] = copia(x);
+  });
+  return ordem.map(function (id) { return mapa[id]; });
+}
+function indiciosVivos() { return estado.indicios.filter(function (x) { return !x.apagado && !x.virou; }); }
+function indicio(id) { return estado.indicios.filter(function (x) { return x.id === id; })[0] || null; }
+function curto(s) { s = String(s || "").replace(/\s+/g, " ").trim(); return s.length > 60 ? s.slice(0, 57) + "…" : s; }
+
+// Bandeja "Fotos a distribuir" (pedido da AFT, 14/10/2026): importa de uma vez
+// as fotos da câmera do celular, já carimbadas, e cada uma vai depois para um
+// indício, uma constatação ou uma ementa da OS. A foto que sai da bandeja fica
+// marcada ("destino" ou "apagado", sem a imagem), para não voltar pela junção.
+function fotosNaBandeja() { return estado.bandeja.filter(function (f) { return !f.apagado && !f.destino && f.data; }); }
+function importarParaBandeja() {
+  var inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
+  inp.onchange = function () {
+    if (!inp.files.length) return;
+    var fila = Array.prototype.slice.call(inp.files).sort(function (a, b) { return (a.lastModified || 0) - (b.lastModified || 0); });
+    var alvo = {fotos: []}, falhas = 0, p = Promise.resolve();
+    toast("Carimbando " + fila.length + (fila.length > 1 ? " fotos…" : " foto…"), 3000);
+    fila.forEach(function (f) { p = p.then(function () { return adicionarFoto(alvo, f).catch(function () { falhas++; }); }); });
+    p.then(function () {
+      var agora = agoraIso();
+      alvo.fotos.forEach(function (f) { f.atualizado_em = agora; estado.bandeja.push(f); });
+      mudou(null); render();
+      toast(alvo.fotos.length + (alvo.fotos.length === 1 ? " foto na bandeja." : " fotos na bandeja.")
+        + (falhas ? " " + falhas + " não abriram." : ""), 3500);
+    });
+  };
+  inp.click();
+}
+function opcoesDestino() {
+  var o = "", inds = indiciosVivos();
+  if (inds.length) o += '<optgroup label="Indícios">' + inds.slice().reverse().map(function (x) {
+    return '<option value="i:' + esc(x.id) + '">' + esc(curto(x.texto)) + "</option>"; }).join("") + "</optgroup>";
+  var cs = vivos().filter(function (i) { return i.origem !== "os"; }).reverse();
+  if (cs.length) o += '<optgroup label="Constatações">' + cs.map(function (i) {
+    return '<option value="c:' + esc(i.id) + '">' + esc(curto(i.relato || "(sem relato)")) + "</option>"; }).join("") + "</optgroup>";
+  var es = vivos().filter(function (i) { return i.origem === "os"; });
+  if (es.length) o += '<optgroup label="Ementas da OS">' + es.map(function (i) {
+    return '<option value="c:' + esc(i.id) + '">' + esc((i.codigo ? i.codigo + " · " : "") + curto(i.descricao || i.relato || "")) + "</option>"; }).join("") + "</optgroup>";
+  return o;
+}
+function mandarFoto(fid, destino, emLote) {
+  var f = estado.bandeja.filter(function (x) { return x.id === fid; })[0];
+  if (!f || !f.data) return false;
+  var agora = agoraIso();
+  if (destino === "x") {
+    estado.bandeja = estado.bandeja.map(function (x) { return x.id === fid ? {id: fid, apagado: true, atualizado_em: agora} : x; });
+  } else {
+    var foto = {id: f.id, data: f.data, quando: f.quando, origem_hora: f.origem_hora, legenda: f.legenda || ""};
+    if (destino.charAt(0) === "c") {
+      var it = item(destino.slice(2)); if (!it) return false;
+      it.fotos.push(foto); mudou(it);
+    } else {
+      var ind = indicio(destino.slice(2)); if (!ind) return false;
+      ind.fotos = ind.fotos || []; ind.fotos.push(foto); ind.atualizado_em = agora;
+    }
+    estado.bandeja = estado.bandeja.map(function (x) { return x.id === fid ? {id: fid, destino: destino, atualizado_em: agora} : x; });
+  }
+  mudou(null);
+  if (!emLote) render();
+  return true;
+}
+var rascunhoIndicio = "";
+function anotarIndicio() {
+  var t = rascunhoIndicio.trim();
+  if (!t) { toast("Escreva o indício antes de anotar."); return; }
+  var agora = agoraIso();
+  estado.indicios.push({id: "i" + Date.now().toString(36), texto: t, fotos: [], constatado_em: hoje(), criado_em: agora, atualizado_em: agora});
+  rascunhoIndicio = ""; mudou(null); render();
+  var el = app.querySelector('[data-campo="indicio-novo"]'); if (el) el.focus();
 }
 // Fotos e documentos: soma dos dois lados, pelo id. Removido fica marcado
 // ("apagado") para não voltar pela junção com a outra versão.
@@ -294,7 +400,7 @@ function mudou(it, campo) {
   alteradoDepoisDeSalvar = true;
   clearTimeout(tGravar);
   tGravar = setTimeout(gravarNoAparelho, 400);
-  if (arquivoHandle && arquivoPermitido) { clearTimeout(tArquivo); tArquivo = setTimeout(function () { salvarNoArquivo(false); }, 2500); }
+  if (arquivoHandle && arquivoPermitido && PODE_GRAVAR_DIRETO) { clearTimeout(tArquivo); tArquivo = setTimeout(function () { salvarNoArquivo(false); }, 2500); }
   status();
 }
 function gravarNoAparelho() {
@@ -622,13 +728,41 @@ function render() {
   tit.title = (estado.empresa || "") + (estado.ri ? " · RI " + estado.ri : "");
   document.getElementById("progresso").style.width = (c.tot ? Math.round(100 * c.feitos / c.tot) : 0) + "%";
   document.getElementById("contagem").textContent = c.feitos + "/" + c.tot + " marcadas · "
-    + c.irr + " irregulares" + (c.irr ? " (" + c.semDesf + " sem desfecho)" : "") + " · " + c.duv + " pendente(s) de confirmação";
+    + c.irr + " irregulares" + (c.irr ? " (" + c.semDesf + " sem desfecho)" : "") + " · " + c.duv + " pendente(s) de confirmação"
+    + (indiciosVivos().length ? " · " + indiciosVivos().length + " indício(s)" : "")
+    + (fotosNaBandeja().length ? " · " + fotosNaBandeja().length + " foto(s) a distribuir" : "");
   var h = estado._aviso ? '<div class="aviso">' + esc(estado._aviso) + "</div>" : "";
   // Informações gerais no alto (pedido da AFT, 09/10/2026): entrevistas,
   // contatos, e-mails. É o antigo "Observações gerais" do fim da página, com o
   // mesmo campo por dentro (observacoes), para o texto já escrito não se perder.
   h += "<h2>Informações gerais</h2>";
   h += '<textarea class="info-gerais" data-campo="observacoes" placeholder="Entrevistas, contatos (nome, cargo, e-mail, telefone), horários e outras anotações da fiscalização">' + esc(estado.observacoes) + "</textarea>";
+  // Indícios de irregularidade (pedido da AFT, 14/10/2026): anotação rápida de
+  // uma suspeita. O "＋" a torna irregularidade definitiva: vira constatação
+  // irregular, com o texto e a data do indício, e sai desta lista.
+  var inds = indiciosVivos();
+  h += "<h2>Indícios de irregularidade</h2>";
+  h += '<div class="indicio-novo"><input type="text" data-campo="indicio-novo" placeholder="Anote rápido uma possível irregularidade" value="' + esc(rascunhoIndicio) + '">'
+    + '<button class="btn cheio" type="button" data-acao="indicio-anotar">Anotar</button></div>';
+  h += inds.length ? '<ul class="indicios">' + inds.slice().reverse().map(function (x) {
+    return '<li class="indicio" data-ind="' + esc(x.id) + '"><textarea data-campo="indicio" rows="1">' + esc(x.texto) + "</textarea>"
+      + ((x.fotos || []).filter(function (f) { return !f.apagado; }).length ? '<span class="ind-fotos" title="Fotos deste indício">📷 ' + (x.fotos || []).filter(function (f) { return !f.apagado; }).length + "</span>" : "")
+      + '<button type="button" class="ind-mais" data-acao="indicio-virar" title="Tornar irregularidade definitiva" aria-label="Tornar irregularidade definitiva">＋</button>'
+      + '<button type="button" class="ind-tirar" data-acao="indicio-tirar" title="Descartar o indício" aria-label="Descartar o indício">×</button></li>';
+  }).join("") + "</ul>" : '<p class="vazio">Nenhum indício anotado.</p>';
+  var band = fotosNaBandeja();
+  h += "<h2>Fotos a distribuir" + (band.length ? " (" + band.length + ")" : "") + "</h2>";
+  h += '<div class="acoes"><button class="btn" type="button" data-acao="bandeja-importar">📥 Importar fotos da câmera</button></div>';
+  if (band.length) {
+    var opc = opcoesDestino();
+    h += '<label class="bandeja-todas">Mandar todas para <select data-campo="bandeja-todas"><option value="">escolha…</option>' + opc + "</select></label>";
+    h += '<div class="bandeja">' + band.map(function (f) {
+      return '<figure class="foto-b" data-foto="' + esc(f.id) + '"><img src="' + esc(f.data) + '" alt="Foto de ' + esc(f.quando) + '" loading="lazy">'
+        + "<figcaption>" + esc(f.quando) + "</figcaption>"
+        + '<select data-campo="bandeja-destino" aria-label="Mandar a foto para"><option value="">Mandar para…</option>' + opc
+        + '<option value="x">✕ Descartar a foto</option></select></figure>';
+    }).join("") + "</div>";
+  } else h += '<p class="vazio">Nenhuma foto esperando. As fotos importadas chegam aqui já carimbadas.</p>';
   h += "<h2>Ementas e constatações</h2>";
   h += '<div class="filtros">' + [["todas", "Todas"], ["pendentes", "Pendentes"], ["irregulares", "Irregulares"], ["sem_desfecho", "Sem desfecho"], ["duvida", "Pendente de Confirmação"]].map(function (f) {
     return '<button type="button" data-acao="filtro" data-v="' + f[0] + '" aria-pressed="' + (filtro === f[0]) + '">' + f[1] + "</button>"; }).join("") + "</div>";
@@ -651,6 +785,26 @@ app.addEventListener("click", function (ev) {
   var acao = alvo.getAttribute("data-acao");
   var card = alvo.closest(".cartao"), it = card ? item(card.getAttribute("data-id")) : null;
   if (acao === "filtro") { filtro = alvo.getAttribute("data-v"); render(); return; }
+  if (acao === "indicio-anotar") { anotarIndicio(); return; }
+  if (acao === "bandeja-importar") { importarParaBandeja(); return; }
+  if (acao === "indicio-tirar" || acao === "indicio-virar") {
+    var iid = alvo.closest(".indicio").getAttribute("data-ind");
+    var ind = estado.indicios.filter(function (x) { return x.id === iid; })[0]; if (!ind) return;
+    if (acao === "indicio-tirar") {
+      var nf = (ind.fotos || []).filter(function (f) { return !f.apagado; }).length;
+      if (!confirm(nf ? "Descartar este indício e as " + nf + " foto(s) dele?" : "Descartar este indício?")) return;
+      ind.apagado = true; ind.atualizado_em = agoraIso(); mudou(null); render(); return; }
+    // ＋: vira irregularidade definitiva, igual a uma constatação irregular.
+    var nova = {id: "c" + Date.now().toString(36), origem: "campo", tipo: "inspecao", duvida: false,
+      codigo: "", descricao: "", grupo: "", situacao: "irregular", relato: ind.texto, documento: "",
+      fotos: (ind.fotos || []).filter(function (f) { return !f.apagado; }).map(copia),
+      documentos: [], desfechos: {}, constatado_em: ind.constatado_em || hoje(), enquadramento: null, de_indicio: ind.id};
+    ind.virou = nova.id; ind.atualizado_em = agoraIso();
+    estado.itens.push(nova); filtro = "todas"; mudou(nova); render();
+    var cn = app.querySelector('.cartao[data-id="' + nova.id + '"]');
+    if (cn) cn.scrollIntoView({block: "start", behavior: "smooth"});
+    toast("Virou irregularidade. Complete a ementa e as fotos no cartão.", 3500);
+    return; }
   if (acao === "expandir") { alvo.classList.toggle("aberta"); return; }
   if (acao === "sug-ementa" && it) { trocarEmenta(it, alvo.getAttribute("data-cod")); return; }
   if (acao === "situacao" && it) {
@@ -692,18 +846,37 @@ app.addEventListener("input", function (ev) {
   var campo = ev.target.getAttribute("data-campo"); if (!campo) return;
   if (campo === "ementa") { mostrarSugestoes(ev.target); return; }   // a troca vale ao escolher na lista ou ao sair do campo
   if (campo === "observacoes") { estado.observacoes = ev.target.value; mudou(null, "observacoes"); return; }
+  if (campo === "indicio-novo") { rascunhoIndicio = ev.target.value; return; }
+  if (campo === "indicio") {
+    var li = ev.target.closest(".indicio"), iid = li && li.getAttribute("data-ind");
+    var ind = estado.indicios.filter(function (x) { return x.id === iid; })[0];
+    if (ind) { ind.texto = ev.target.value; ind.atualizado_em = agoraIso(); mudou(null); }
+    return; }
   if (campo === "estabelecimento") { estado.carimbo.estabelecimento = ev.target.value; mudou(null, "carimbo"); return; }
   var card = ev.target.closest(".cartao"), it = card && item(card.getAttribute("data-id"));
   if (it) { it[campo] = ev.target.value; mudou(it); }
 });
 // Troca da ementa: vale quando a AFT sai do campo ou toca em OK/Enter.
 app.addEventListener("change", function (ev) {
-  if (ev.target.getAttribute("data-campo") !== "ementa") return;
+  var cmp = ev.target.getAttribute("data-campo");
+  if (cmp === "bandeja-destino") {
+    var fig = ev.target.closest(".foto-b"), dest = ev.target.value;
+    if (!dest) return;
+    if (dest === "x" && !confirm("Descartar esta foto?")) { ev.target.value = ""; return; }
+    mandarFoto(fig.getAttribute("data-foto"), dest); return; }
+  if (cmp === "bandeja-todas") {
+    var d = ev.target.value; if (!d) return;
+    var ids = fotosNaBandeja().map(function (f) { return f.id; });
+    if (!confirm("Mandar as " + ids.length + " fotos para o mesmo lugar?")) { ev.target.value = ""; return; }
+    ids.forEach(function (id) { mandarFoto(id, d, true); });
+    render(); toast(ids.length + " fotos distribuídas."); return; }
+  if (cmp !== "ementa") return;
   if (/[a-zà-ú]/i.test(ev.target.value)) { render(); return; }   // eram palavras de busca: nada muda
   var card = ev.target.closest(".cartao"), it = card && item(card.getAttribute("data-id"));
   if (it) trocarEmenta(it, ev.target.value);
 });
 app.addEventListener("keydown", function (ev) {
+  if (ev.key === "Enter" && ev.target.getAttribute("data-campo") === "indicio-novo") { ev.preventDefault(); anotarIndicio(); return; }
   if (ev.key === "Enter" && ev.target.getAttribute("data-campo") === "ementa") {
     ev.preventDefault();
     var sug = ev.target.closest(".enq").querySelectorAll(".sug");
@@ -867,7 +1040,7 @@ function salvarNoArquivo(comClique) {
         salvoNoArquivoEm = new Date(); alteradoDepoisDeSalvar = false; gravarNoAparelho(); status(); return true;
       });
     });
-  }).catch(function () { toast("Não consegui gravar no arquivo. Tente Salvar arquivo de novo.", 4000); return false; });
+  }).catch(function (e) { toast("Não consegui gravar no arquivo (" + (e && (e.name || e.message) || "erro") + "). Tente de novo.", 6000); return false; });
 }
 function escolherArquivo() {
   return window.showSaveFilePicker({suggestedName: nomeArquivo(),
@@ -904,7 +1077,44 @@ document.getElementById("btn-salvar").addEventListener("click", function () {
   else escolherArquivo();
 });
 // Ao voltar para a janela no computador, relê o arquivo (o assistente pode ter gravado nele).
-window.addEventListener("focus", function () { if (arquivoHandle && arquivoPermitido && !alteradoDepoisDeSalvar) salvarNoArquivo(false); });
+window.addEventListener("focus", function () { if (PODE_GRAVAR_DIRETO && arquivoHandle && arquivoPermitido && !alteradoDepoisDeSalvar) salvarNoArquivo(false); });
+
+// Sincronizar (TESTE no celular): lê o arquivo da pasta da OS no OneDrive, junta
+// com o celular (o mais novo de cada item) e grava de volta, num toque. É a
+// mesma gravação direta que o computador usa. Cada falha diz onde parou, para
+// a AFT contar ao assistente.
+function sincronizar() {
+  if (typeof window.showOpenFilePicker !== "function") {
+    toast("Teste: este celular NÃO permite sincronizar direto (sem acesso a arquivo). Use Exportar.", 7000); return; }
+  var escolher = arquivoHandle ? Promise.resolve(arquivoHandle) :
+    window.showOpenFilePicker({multiple: false, types: [{description: "Prancheta", accept: {"text/html": [".html", ".htm"]}}]})
+      .then(function (hs) { return hs[0]; });
+  var etapa = "escolher o arquivo";
+  escolher.then(function (hd) {
+    arquivoHandle = hd; etapa = "pedir permissão de gravação";
+    var p = hd.requestPermission ? hd.requestPermission({mode: "readwrite"}) : Promise.resolve("granted");
+    return p.then(function (st) {
+      arquivoPermitido = st === "granted";
+      if (!arquivoPermitido) { arquivoHandle = null;
+        toast("Teste: sem permissão para gravar nesse arquivo. Toque de novo em Sincronizar e permita.", 6000); return false; }
+      idbPut("arquivo|" + chave(), hd).catch(function () {});
+      etapa = "ler e gravar o arquivo";
+      return salvarNoArquivo(false);
+    });
+  }).then(function (ok) {
+    if (ok) { exportadoEm = new Date(); alteradoDepoisDeSalvar = false; status();
+      toast("✓ Sincronizado com o arquivo da pasta da OS às " + hhmm(new Date()) + ".", 4500); }
+    else if (ok === false) arquivoHandle = arquivoPermitido ? arquivoHandle : null;
+  }).catch(function (e) {
+    if (e && e.name === "AbortError") return;
+    arquivoHandle = null;
+    toast("Teste: parou ao " + etapa + " (" + (e && (e.name || e.message) || "erro") + "). Use Exportar e me conte esta mensagem.", 9000);
+  });
+}
+if (SINCRONIA_CELULAR) {
+  document.getElementById("btn-sincronizar").hidden = false;
+  document.getElementById("btn-sincronizar").addEventListener("click", sincronizar);
+}
 
 // ------------------------------------------------------------ partida
 // Junta o que está no arquivo com o que estava guardado neste aparelho.
@@ -920,7 +1130,7 @@ idbGet(chave()).then(function (guardado) {
     gravadoEm = guardado.salvo_em ? new Date(ts(guardado.salvo_em)) : null;
   }
   guardaAparelho = "idb";
-  return PODE_GRAVAR_DIRETO ? idbGet("arquivo|" + chave()).then(function (h) {
+  return (PODE_GRAVAR_DIRETO || SINCRONIA_CELULAR) ? idbGet("arquivo|" + chave()).then(function (h) {
     if (h) { arquivoHandle = h; return h.queryPermission({mode: "readwrite"}).then(function (p) { arquivoPermitido = p === "granted"; }); }
   }).catch(function () {}) : null;
 }).catch(function () {
