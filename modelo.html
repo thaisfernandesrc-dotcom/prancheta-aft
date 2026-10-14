@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="prancheta-codigo" content="2026-10-14T21:50:11Z">
+<meta name="prancheta-codigo" content="2026-10-14T22:01:35Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Prancheta de Inspeção</title>
 <style>
@@ -230,6 +230,14 @@ function normalizar(s) {
     it.fotos = it.fotos || [];
     it.documentos = it.documentos || [];
     if (!it.desfechos || typeof it.desfechos !== "object") it.desfechos = {};
+    // Ementa que a AFT digitou numa constatação é DEFINITIVA, como a da OS (pedido
+    // da AFT, 14/10/2026): fica no próprio item, não como "enquadramento".
+    var en = it.enquadramento;
+    if (it.origem !== "os" && en && en.por === "AFT" && en.codigo && (!it.codigo || it.codigo === en.codigo)) {
+      it.codigo = en.codigo; it.gradacao = en.gradacao || it.gradacao || ""; it.descricao = en.descricao || it.descricao || "";
+      it.capitulacao = en.capitulacao || it.capitulacao || ""; it.ementa_por = "AFT"; it.ementa_em = en.em || it.ementa_em || "";
+      it.enquadramento = null;
+    }
   });
   return s;
 }
@@ -629,11 +637,30 @@ function ementaAtual(it) {
   var x = ementario().ementas[cod];
   if (it.origem === "os") return {codigo: cod, gradacao: it.gradacao || (x ? x[0] : ""),
     descricao: it.descricao || (x ? x[2] : ""), capitulacao: x ? x[3] : ""};
+  if (it.ementa_por === "AFT") return {codigo: cod, gradacao: it.gradacao || (x ? x[0] : ""),
+    descricao: it.descricao || (x ? x[2] : ""), capitulacao: it.capitulacao || (x ? x[3] : ""), naoAchou: !x};
   return x ? {codigo: cod, gradacao: x[0], descricao: x[2], capitulacao: x[3]}
            : {codigo: cod, gradacao: "", descricao: "", capitulacao: "", naoAchou: true};
 }
 function trocarEmenta(it, valor) {
   var bruto = String(valor || "").trim(), atual = ementaAtual(it), agora = agoraIso();
+  // Constatação/irregularidade: a ementa digitada pela AFT é a DEFINITIVA do item.
+  if (it.origem !== "os") {
+    if (!bruto) {
+      if (!atual) return;
+      it.codigo = ""; it.gradacao = ""; it.descricao = ""; it.capitulacao = ""; it.ementa_por = ""; it.enquadramento = null;
+      mudou(it); render(); return;
+    }
+    var c2 = formatarCodigo(bruto);
+    if (!c2) { toast("A ementa tem 7 dígitos: 000000-0.", 3500); render(); return; }
+    if (atual && atual.codigo === c2 && it.ementa_por === "AFT") { render(); return; }
+    var x2 = ementario().ementas[c2];
+    it.codigo = c2; it.gradacao = x2 ? x2[0] : ""; it.descricao = x2 ? x2[2] : ""; it.capitulacao = x2 ? x2[3] : "";
+    it.ementa_por = "AFT"; it.ementa_em = hoje(); it.enquadramento = null;
+    mudou(it); render();
+    if (!x2) toast("Não achei a ementa " + c2 + " entre as em vigor. Confira o código.", 4500);
+    return;
+  }
   if (!bruto) {                         // apagou: a da OS volta; a constatação fica sem ementa
     if (!atual) return;
     if (it.origem !== "os") it.codigo = "";
@@ -707,7 +734,7 @@ function blocoEmenta(it) {
 function cartao(it) {
   it.fotos = it.fotos || []; it.documentos = it.documentos || [];
   var h = '<div class="cartao" data-id="' + esc(it.id) + '" data-sit="' + esc(it.situacao || "") + '" data-duvida="' + it.duvida + '">';
-  h += '<div class="topo"><div class="tit"><span class="cod">' + (it.origem === "os" ? "Ementa da OS" : "Constatação") + "</span>";
+  h += '<div class="topo"><div class="tit"><span class="cod">' + (it.origem === "os" ? "Ementa da OS" : it.de_indicio ? "Irregularidade" : "Constatação") + "</span>";
   if (it.duvida) h += '<span class="marca-duvida">Pendente de Confirmação</span>';
   h += '</div><button class="duvida" type="button" data-acao="duvida" aria-pressed="' + it.duvida
     + '" title="Não tenho certeza de que é infração" aria-label="Marcar como Pendente de Confirmação">?</button></div>';
