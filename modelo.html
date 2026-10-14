@@ -87,7 +87,13 @@ textarea.info-gerais{min-height:130px;max-height:60vh;field-sizing:content}
 .enq .desc{margin:4px 0 0}
 .linha-ementa{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .linha-ementa .rot3{font-size:13px;color:var(--azul);font-weight:700}
-.enq input.cod-ementa{width:8.5em;flex:none;padding:6px 8px;font-weight:700;color:var(--azul);font-size:15px}
+.enq input.cod-ementa{flex:1;min-width:8.5em;padding:6px 8px;font-weight:700;color:var(--azul);font-size:15px}
+.sugestoes{margin-top:6px;max-height:55vh;overflow-y:auto;border:1px solid #c4d6f0;border-radius:8px;background:#fff}
+.sugestoes .sug{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--linha);background:#fff;padding:8px 10px;font:inherit;font-size:13.5px;color:var(--texto);cursor:pointer}
+.sugestoes .sug:active{background:var(--azul-claro)}
+.sugestoes .sug b{color:var(--azul)}
+.sugestoes .sug span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin-top:2px}
+.sugestoes .sug-vazio{padding:8px 10px;font-size:13px;color:var(--suave)}
 .enq .alerta{color:var(--irregular)}
 .enq .cap{font-size:12.5px;color:var(--suave);margin-top:4px}
 .aviso{background:#fff4d6;border:1px solid #f0d58a;border-radius:8px;padding:10px;font-size:14px;margin:10px 0}
@@ -98,9 +104,19 @@ textarea.info-gerais{min-height:130px;max-height:60vh;field-sizing:content}
 dialog{border:0;border-radius:12px;padding:0;max-width:96vw;width:640px}
 dialog img{width:100%;display:block}
 dialog .corpo{padding:12px}
-#menu-foto{width:320px}
-.menu{display:flex;flex-direction:column;gap:10px}
-.menu .btn{width:100%}
+#camera{position:fixed;inset:0;z-index:20;background:#000;display:flex;flex-direction:column}
+#camera[hidden]{display:none}
+#camera video{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}
+#camera .cam-topo{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;gap:8px;
+  padding:calc(10px + env(safe-area-inset-top)) 14px 10px;color:#fff;font-size:15px;background:linear-gradient(rgba(0,0,0,.6),transparent)}
+#camera .cam-btn{border:1px solid rgba(255,255,255,.75);background:rgba(0,0,0,.35);color:#fff;border-radius:999px;padding:8px 16px;font-size:15px;font-weight:700;cursor:pointer}
+#camera .cam-btn[aria-pressed="true"]{background:#ffd54a;color:#000;border-color:#ffd54a}
+#camera .cam-barra{flex:none;display:flex;align-items:center;justify-content:space-between;padding:16px 22px calc(16px + env(safe-area-inset-bottom));background:#000}
+#camera .disparo{width:78px;height:78px;border-radius:50%;border:5px solid #fff;background:#fff;box-shadow:inset 0 0 0 3px #000;cursor:pointer}
+#camera .disparo:active{transform:scale(.92)}
+#camera .miniatura{width:58px;height:58px;border-radius:8px;border:2px solid #fff;background:#222 center/cover no-repeat}
+#camera .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .18s}
+#camera .flash.on{opacity:.75;transition:none}
 .vazio{color:var(--suave);font-size:14px;margin:6px 0}
 .toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:#17202b;color:#fff;padding:10px 14px;border-radius:8px;font-size:14px;z-index:9;max-width:90vw}
 details.config{margin-top:14px;font-size:14px}
@@ -124,11 +140,15 @@ details.config summary{color:var(--suave);cursor:pointer}
   <div class="acoes"><button class="btn cheio" type="button" data-acao="visor-ok">OK</button>
   <button class="btn perigo" type="button" data-acao="visor-apagar">Apagar foto</button></div>
 </div></dialog>
-<dialog id="menu-foto"><div class="corpo menu">
-  <button class="btn cheio" type="button" data-acao="menu-camera" autofocus>📷 Tirar foto</button>
-  <button class="btn" type="button" data-acao="menu-galeria">🖼 Escolher da galeria</button>
-  <button class="btn link" type="button" data-acao="menu-cancelar">Cancelar</button>
-</div></dialog>
+<div id="camera" hidden>
+  <video id="cam-video" autoplay playsinline muted></video>
+  <div class="flash" id="cam-flash"></div>
+  <div class="cam-topo"><span id="cam-conta"></span>
+    <span><button class="cam-btn" type="button" id="cam-lanterna" aria-pressed="false" hidden>🔦</button>
+    <button class="cam-btn" type="button" id="cam-pronto">Pronto</button></span></div>
+  <div class="cam-barra"><div class="miniatura" id="cam-mini"></div>
+    <button class="disparo" type="button" id="cam-disparo" aria-label="Tirar foto"></button><span style="width:58px"></span></div>
+</div>
 <script id="dados-prancheta" type="application/json">{}</script>
 <script id="ementario-prancheta" type="application/json">{}</script>
 <script>
@@ -497,13 +517,47 @@ function trocarEmenta(it, valor) {
   mudou(it); render();
   if (!x) toast("Não achei a ementa " + cod + " entre as em vigor. Confira o código.", 4500);
 }
+// Busca no ementário embutido (pedido da AFT, 14/10/2026): no campo da ementa,
+// palavras (sem acento, todas precisam aparecer) ou parte do código; a lista
+// mostra código, gradação, NR e texto, e um toque escolhe. Funciona sem internet.
+var INDICE = null;
+function semAcento(s) { return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }
+function indiceEmentas() {
+  if (INDICE) return INDICE;
+  var em = ementario().ementas; INDICE = [];
+  Object.keys(em).forEach(function (cod) { var x = em[cod], g = String(x[1] || "");
+    INDICE.push([cod, semAcento(cod + " " + cod.replace("-", "") + " " + g + " " + g.replace("-", "") + " " + (x[2] || ""))]); });
+  return INDICE;
+}
+function buscarEmentas(q) {
+  var termos = semAcento(q).split(/\s+/).filter(Boolean), r = [], idx = indiceEmentas();
+  if (!termos.length) return r;
+  for (var i = 0; i < idx.length && r.length < 41; i++) {
+    var ok = true;
+    for (var j = 0; j < termos.length; j++) if (idx[i][1].indexOf(termos[j]) < 0) { ok = false; break; }
+    if (ok) r.push(idx[i][0]);
+  }
+  return r;
+}
+function mostrarSugestoes(input) {
+  var caixa = input.closest(".enq") && input.closest(".enq").querySelector(".sugestoes"); if (!caixa) return;
+  var q = input.value.trim(), so = q.replace(/\D/g, "");
+  if (q.length < 3 || (/^[\d\s.-]+$/.test(q) && so.length === 7)) { caixa.innerHTML = ""; caixa.hidden = true; return; }
+  var res = buscarEmentas(q), em = ementario().ementas;
+  if (!res.length) { caixa.innerHTML = '<div class="sug-vazio">Nenhuma ementa em vigor com essas palavras.</div>'; caixa.hidden = false; return; }
+  caixa.innerHTML = (res.length > 40 ? '<div class="sug-vazio">Mais de 40 ementas: acrescente palavras para filtrar.</div>' : "")
+    + res.slice(0, 40).map(function (cod) { var x = em[cod];
+      return '<button type="button" class="sug" data-acao="sug-ementa" data-cod="' + esc(cod) + '"><b>' + esc(cod) + "</b> · "
+        + (x[0] === "sem gradação" ? "Sem gradação" : esc(x[0])) + (x[1] ? " · " + esc(x[1]) : "") + "<span>" + esc(x[2]) + "</span></button>"; }).join("");
+  caixa.hidden = false;
+}
 function blocoEmenta(it) {
   var e = ementaAtual(it);
   var h = '<div class="enq"><div class="linha-ementa"><label class="rot3" for="em-' + esc(it.id) + '">Ementa</label>'
-    + '<input type="text" class="cod-ementa" id="em-' + esc(it.id) + '" data-campo="ementa" inputmode="numeric" enterkeyhint="done" placeholder="000000-0" value="'
+    + '<input type="text" class="cod-ementa" id="em-' + esc(it.id) + '" data-campo="ementa" inputmode="text" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="código ou palavras" value="'
     + esc(e ? e.codigo : "") + '" aria-label="Ementa (pode trocar)">'
-    + (e ? "<b>" + rotGrad(e.gradacao) + "</b>" : "") + "</div>";
-  if (!e) return h + '<div class="cap">Digite a ementa, se souber. Pode trocar a qualquer momento.</div></div>';
+    + (e ? "<b>" + rotGrad(e.gradacao) + "</b>" : "") + "</div>" + '<div class="sugestoes" hidden></div>';
+  if (!e) return h + '<div class="cap">Digite o código ou palavras (ex.: extintor; NR-12 serra) e toque na ementa da lista. Pode trocar a qualquer momento.</div></div>';
   if (it.origem === "os" && e.codigo !== it.codigo) h += '<div class="cap">Ementa alterada; a da OS é ' + esc(it.codigo) + ". Para voltar, apague o campo.</div>";
   if (e.naoAchou) h += '<div class="cap alerta">Não achei esta ementa entre as em vigor guardadas na prancheta. Confira o código.</div>';
   h += '<div class="desc" data-acao="expandir">' + esc(e.descricao || "") + "</div>";
@@ -538,6 +592,7 @@ function cartao(it) {
           + (em ? "<small>" + esc(em) + "</small>" : "") + "</button>"; }).join("") + "</div></div>";
   }
   h += '<div class="acoes"><button class="btn" type="button" data-acao="foto">📷 Foto</button>';
+  h += '<button class="btn" type="button" data-acao="galeria">🖼 Galeria</button>';
   h += '<button class="btn" type="button" data-acao="doc-anexar">📎 Documento</button>';   // em todos os cartões (decisão da AFT)
   if (it.origem !== "os") h += '<button class="btn perigo" type="button" data-acao="apagar-item">Apagar</button>';
   h += "</div>";
@@ -597,6 +652,7 @@ app.addEventListener("click", function (ev) {
   var card = alvo.closest(".cartao"), it = card ? item(card.getAttribute("data-id")) : null;
   if (acao === "filtro") { filtro = alvo.getAttribute("data-v"); render(); return; }
   if (acao === "expandir") { alvo.classList.toggle("aberta"); return; }
+  if (acao === "sug-ementa" && it) { trocarEmenta(it, alvo.getAttribute("data-cod")); return; }
   if (acao === "situacao" && it) {
     var v = alvo.getAttribute("data-v"); it.situacao = it.situacao === v ? "" : v;
     if (it.situacao && !it.constatado_em) it.constatado_em = hoje();
@@ -605,7 +661,8 @@ app.addEventListener("click", function (ev) {
     var k = alvo.getAttribute("data-v"); it.desfechos = it.desfechos || {};
     if (it.desfechos[k]) delete it.desfechos[k]; else it.desfechos[k] = hoje();
     mudou(it); render(); return; }
-  if (acao === "foto" && it) { menuFotoId = it.id; document.getElementById("menu-foto").showModal(); return; }
+  if (acao === "foto" && it) { abrirCamera(it.id); return; }
+  if (acao === "galeria" && it) { escolherFoto(it.id, false); return; }
   if (acao === "doc-anexar" && it) { escolherDocumento(it.id); return; }
   if ((acao === "doc-abrir" || acao === "doc-tirar") && it) {
     var did = alvo.closest(".doc").getAttribute("data-doc");
@@ -630,8 +687,10 @@ app.addEventListener("click", function (ev) {
     if (card) { card.scrollIntoView({block: "start", behavior: "smooth"}); var el = card.querySelector("textarea"); if (el) el.focus({preventScroll: true}); }
   }
 });
+app.addEventListener("pointerdown", function (ev) { if (ev.target.closest(".sug")) ev.preventDefault(); });
 app.addEventListener("input", function (ev) {
-  var campo = ev.target.getAttribute("data-campo"); if (!campo || campo === "ementa") return;   // ementa: ao sair do campo
+  var campo = ev.target.getAttribute("data-campo"); if (!campo) return;
+  if (campo === "ementa") { mostrarSugestoes(ev.target); return; }   // a troca vale ao escolher na lista ou ao sair do campo
   if (campo === "observacoes") { estado.observacoes = ev.target.value; mudou(null, "observacoes"); return; }
   if (campo === "estabelecimento") { estado.carimbo.estabelecimento = ev.target.value; mudou(null, "carimbo"); return; }
   var card = ev.target.closest(".cartao"), it = card && item(card.getAttribute("data-id"));
@@ -640,11 +699,17 @@ app.addEventListener("input", function (ev) {
 // Troca da ementa: vale quando a AFT sai do campo ou toca em OK/Enter.
 app.addEventListener("change", function (ev) {
   if (ev.target.getAttribute("data-campo") !== "ementa") return;
+  if (/[a-zà-ú]/i.test(ev.target.value)) { render(); return; }   // eram palavras de busca: nada muda
   var card = ev.target.closest(".cartao"), it = card && item(card.getAttribute("data-id"));
   if (it) trocarEmenta(it, ev.target.value);
 });
 app.addEventListener("keydown", function (ev) {
-  if (ev.key === "Enter" && ev.target.getAttribute("data-campo") === "ementa") { ev.preventDefault(); ev.target.blur(); }
+  if (ev.key === "Enter" && ev.target.getAttribute("data-campo") === "ementa") {
+    ev.preventDefault();
+    var sug = ev.target.closest(".enq").querySelectorAll(".sug");
+    if (sug.length === 1) { sug[0].click(); return; }   // uma só na lista: Enter escolhe
+    if (!/[a-zà-ú]/i.test(ev.target.value)) ev.target.blur();
+  }
 });
 // Documentos (em qualquer cartão): PDF, imagem, Word, Excel, texto. Ficam dentro
 // da prancheta, como as fotos, sem carimbo. Limite por documento: 15 MB.
@@ -684,17 +749,61 @@ function abrirDocumento(d) {
     setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
   } catch (e) { toast("Não consegui abrir esse documento.", 3500); }
 }
-// Menu da foto: câmera ou galeria. O clique na opção é o gesto que o navegador
-// exige para abrir a câmera ou a galeria.
-var menuFotoId = null;
-document.getElementById("menu-foto").addEventListener("click", function (ev) {
-  var dlg = document.getElementById("menu-foto");
-  var a = ev.target.closest("[data-acao]");
-  if (!a) { if (ev.target === dlg) dlg.close(); return; }   // toque fora do menu fecha
-  var acao = a.getAttribute("data-acao"), id = menuFotoId;
-  dlg.close(); menuFotoId = null;
-  if (acao === "menu-camera" && id) escolherFoto(id, true);
-  else if (acao === "menu-galeria" && id) escolherFoto(id, false);
+// Câmera contínua (pedido da AFT, 14/10/2026: fotografar era lento, com botão,
+// menu, câmera do celular e OK). O 📷 abre a câmera DENTRO da prancheta: cada
+// toque no botão redondo tira a foto e já a carimba, sem sair da tela; tira-se
+// várias seguidas e "Pronto" volta ao cartão. Sem câmera ou sem permissão, cai
+// na câmera do celular, como antes. A galeria tem botão próprio no cartão.
+var cam = {id: null, stream: null, n: 0, fila: Promise.resolve(), lanterna: false};
+function abrirCamera(id) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { escolherFoto(id, true); return; }
+  navigator.mediaDevices.getUserMedia({audio: false,
+    video: {facingMode: {ideal: "environment"}, width: {ideal: 1920}, height: {ideal: 1440}}})
+    .then(function (s) {
+      cam.id = id; cam.stream = s; cam.n = 0; cam.lanterna = false;
+      var v = document.getElementById("cam-video"); v.srcObject = s;
+      var p = v.play(); if (p && p.catch) p.catch(function () {});
+      document.getElementById("cam-conta").textContent = "Toque no botão redondo para fotografar";
+      document.getElementById("cam-mini").style.backgroundImage = "";
+      var tr = s.getVideoTracks()[0], cap = tr && tr.getCapabilities ? tr.getCapabilities() : {};
+      var lt = document.getElementById("cam-lanterna"); lt.hidden = !cap.torch; lt.setAttribute("aria-pressed", "false");
+      document.getElementById("camera").hidden = false;
+    })
+    .catch(function () { toast("Sem acesso à câmera aqui: abrindo a câmera do celular.", 3000); escolherFoto(id, true); });
+}
+function fotografar() {
+  var v = document.getElementById("cam-video");
+  if (!cam.stream || !v.videoWidth) return;
+  var c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0);
+  var quando = new Date(), fl = document.getElementById("cam-flash");
+  fl.classList.add("on"); setTimeout(function () { fl.classList.remove("on"); }, 70);
+  cam.n++; document.getElementById("cam-conta").textContent = cam.n + (cam.n > 1 ? " fotos" : " foto");
+  var id = cam.id;
+  cam.fila = cam.fila.then(function () { return logoPronto; }).then(function () {
+    var it = item(id); if (!it) return;     // busca de novo: a junção pode ter trocado o estado
+    var data = carimbar(c, quando);
+    it.fotos.push({id: "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      data: data, quando: fmtData(quando), origem_hora: "agora", legenda: ""});
+    document.getElementById("cam-mini").style.backgroundImage = 'url("' + data + '")';
+    mudou(it);
+  }).catch(function () { toast("Não consegui guardar a última foto. Tire de novo.", 3500); });
+}
+function fecharCamera() {
+  if (cam.stream) cam.stream.getTracks().forEach(function (t) { t.stop(); });
+  cam.stream = null; document.getElementById("cam-video").srcObject = null;
+  document.getElementById("camera").hidden = true;
+  var n = cam.n;
+  cam.fila.then(function () { render(); if (n) toast(n > 1 ? n + " fotos carimbadas." : "Foto carimbada."); });
+}
+document.getElementById("cam-disparo").addEventListener("click", fotografar);
+document.getElementById("cam-pronto").addEventListener("click", fecharCamera);
+document.getElementById("cam-lanterna").addEventListener("click", function () {
+  var tr = cam.stream && cam.stream.getVideoTracks()[0], bt = this; if (!tr) return;
+  cam.lanterna = !cam.lanterna;
+  tr.applyConstraints({advanced: [{torch: cam.lanterna}]})
+    .then(function () { bt.setAttribute("aria-pressed", String(cam.lanterna)); })
+    .catch(function () { cam.lanterna = !cam.lanterna; });
 });
 var visorAtual = null;
 function abrirVisor(it, fid) {
