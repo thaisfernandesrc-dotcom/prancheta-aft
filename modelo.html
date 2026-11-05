@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="prancheta-codigo" content="2026-10-14T22:30:06Z">
+<meta name="prancheta-codigo" content="2026-11-05T10:05:27Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Prancheta de Inspeção</title>
 <style>
@@ -1129,6 +1129,13 @@ function dadosDoHtml(texto) {
   try { return normalizar(JSON.parse(texto.slice(c, f))); } catch (e) { return null; }
 }
 function nomeArquivo() { return "prancheta-OS" + String(estado.os || "").replace(/\D/g, "") + ".html"; }
+// Exportar do celular: nome com data e hora, para o Android/OneDrive nunca
+// reclamar de arquivo de mesmo nome. O assistente lê sempre o mais recente.
+function nomeExportacao() {
+  var d = new Date();
+  return nomeArquivo().replace(/\.html$/, "") + "-" + d.getFullYear() + dois(d.getMonth() + 1) + dois(d.getDate())
+    + "-" + dois(d.getHours()) + dois(d.getMinutes()) + ".html";
+}
 
 // Computador: grava direto no arquivo da pasta da OS. Antes de gravar, relê o
 // arquivo e junta: o que o assistente gravou nele (enquadramento, constatação
@@ -1171,7 +1178,7 @@ function escolherArquivo() {
 }
 // Celular: compartilhar (OneDrive) ou baixar.
 function exportar() {
-  var arq = new File([htmlCom(estado)], nomeArquivo(), {type: "text/html"});
+  var arq = new File([htmlCom(estado)], nomeExportacao(), {type: "text/html"});
   var concluir = function () { exportadoEm = new Date(); alteradoDepoisDeSalvar = false; status(); };
   if (navigator.canShare && navigator.share) {
     try {
