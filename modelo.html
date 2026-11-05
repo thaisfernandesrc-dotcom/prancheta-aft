@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="prancheta-codigo" content="2026-11-05T10:14:59Z">
+<meta name="prancheta-codigo" content="2026-11-05T10:29:24Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Prancheta de Inspeção</title>
 <style>
@@ -463,6 +463,18 @@ function idbGet(k) { return abrirIdb().then(function (db) { return new Promise(f
 function idbPut(k, v) { return abrirIdb().then(function (db) { return new Promise(function (ok, nao) {
   var t = db.transaction("estados", "readwrite"); t.objectStore("estados").put(v, k);
   t.oncomplete = function () { ok(); }; t.onerror = function () { nao(t.error); }; }); }); }
+
+function idbDel(k) { return abrirIdb().then(function (db) { return new Promise(function (ok, nao) {
+  var t = db.transaction("estados", "readwrite"); t.objectStore("estados").delete(k);
+  t.oncomplete = function () { ok(); }; t.onerror = function () { nao(t.error); }; }); }); }
+// Atalho guardado para o arquivo da pasta da OS que o celular não acha mais
+// (NotFoundError, 05/11/2026): esquece, para o próximo toque em Sincronizar
+// abrir a escolha do arquivo em vez de insistir no atalho morto.
+function esquecerArquivo() {
+  arquivoHandle = null; arquivoPermitido = false;
+  idbDel("arquivo|" + chave()).catch(function () {});
+  status();
+}
 
 var tGravar = null, tArquivo = null;
 function mudou(it, campo) {
@@ -1167,7 +1179,13 @@ function salvarNoArquivo(comClique) {
         salvoNoArquivoEm = new Date(); alteradoDepoisDeSalvar = false; gravarNoAparelho(); status(); return true;
       });
     });
-  }).catch(function (e) { toast("Não consegui gravar no arquivo (" + (e && (e.name || e.message) || "erro") + "). Tente de novo.", 6000); return false; });
+  }).catch(function (e) {
+    if (e && (e.name === "NotFoundError" || e.name === "InvalidStateError")) {
+      esquecerArquivo();
+      toast("O celular não encontra mais aquele arquivo (o OneDrive o trocou de lugar). Toque em Sincronizar e escolha de novo o arquivo da pasta da OS.", 10000);
+      return false;
+    }
+    toast("Não consegui gravar no arquivo (" + (e && (e.name || e.message) || "erro") + "). Tente de novo.", 6000); return false; });
 }
 function escolherArquivo() {
   return window.showSaveFilePicker({suggestedName: nomeArquivo(),
