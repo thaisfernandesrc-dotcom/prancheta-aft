@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="prancheta-codigo" content="2026-11-05T10:05:27Z">
+<meta name="prancheta-codigo" content="2026-11-05T10:14:59Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Prancheta de Inspeção</title>
 <style>
@@ -219,8 +219,9 @@ var alteradoDepoisDeSalvar = false;
 var EH_CELULAR = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")
   || !!(navigator.userAgentData && navigator.userAgentData.mobile);
 var PODE_GRAVAR_DIRETO = typeof window.showSaveFilePicker === "function" && !EH_CELULAR;
-// Sincronizar (TESTE no celular, pedido da AFT em 14/10/2026): no celular a
-// gravação direta fica só no toque do botão, nunca sozinha a cada mudança.
+// Sincronizar (pedido da AFT, 14/10/2026; salvamento automático em 05/11/2026):
+// no celular, um toque no botão liga a prancheta ao arquivo da pasta da OS no
+// OneDrive; a partir daí cada mudança é gravada nele sozinha (como no computador).
 var SINCRONIA_CELULAR = EH_CELULAR;
 
 function normalizar(s) {
@@ -474,7 +475,7 @@ function mudou(it, campo) {
   alteradoDepoisDeSalvar = true;
   clearTimeout(tGravar);
   tGravar = setTimeout(gravarNoAparelho, 400);
-  if (arquivoHandle && arquivoPermitido && PODE_GRAVAR_DIRETO) { clearTimeout(tArquivo); tArquivo = setTimeout(function () { salvarNoArquivo(false); }, 2500); }
+  if (arquivoHandle && arquivoPermitido && (PODE_GRAVAR_DIRETO || SINCRONIA_CELULAR)) { clearTimeout(tArquivo); tArquivo = setTimeout(function () { salvarNoArquivo(false); }, 2500); }
   status();
 }
 function gravarNoAparelho() {
@@ -1203,7 +1204,7 @@ document.getElementById("btn-salvar").addEventListener("click", function () {
   else escolherArquivo();
 });
 // Ao voltar para a janela no computador, relê o arquivo (o assistente pode ter gravado nele).
-window.addEventListener("focus", function () { if (PODE_GRAVAR_DIRETO && arquivoHandle && arquivoPermitido && !alteradoDepoisDeSalvar) salvarNoArquivo(false); });
+window.addEventListener("focus", function () { if ((PODE_GRAVAR_DIRETO || SINCRONIA_CELULAR) && arquivoHandle && arquivoPermitido && !alteradoDepoisDeSalvar) salvarNoArquivo(false); });
 
 // Sincronizar (TESTE no celular): lê o arquivo da pasta da OS no OneDrive, junta
 // com o celular (o mais novo de cada item) e grava de volta, num toque. É a
@@ -1229,7 +1230,7 @@ function sincronizar() {
     });
   }).then(function (ok) {
     if (ok) { exportadoEm = new Date(); alteradoDepoisDeSalvar = false; status();
-      toast("✓ Sincronizado com o arquivo da pasta da OS às " + hhmm(new Date()) + ".", 4500); }
+      toast("✓ Ligado ao arquivo da pasta da OS às " + hhmm(new Date()) + ". Daqui em diante cada mudança vai sozinha para o OneDrive.", 6000); }
     else if (ok === false) arquivoHandle = arquivoPermitido ? arquivoHandle : null;
   }).catch(function (e) {
     if (e && e.name === "AbortError") return;
@@ -1262,7 +1263,10 @@ idbGet(chave()).then(function (guardado) {
 }).catch(function () {
   try { localStorage.setItem("prancheta-teste", "1"); localStorage.removeItem("prancheta-teste"); guardaAparelho = "local"; }
   catch (e) { guardaAparelho = "nenhum"; }
-}).then(render);
+}).then(render).then(function () {
+  // Celular com o arquivo da pasta da OS já ligado e com permissão: junta o que o OneDrive tem.
+  if (SINCRONIA_CELULAR && arquivoHandle && arquivoPermitido) salvarNoArquivo(false);
+});
 
 // Acesso de conferência (usado nos testes da skill; não muda nada sozinho).
 window.__prancheta = {estado: function () { return estado; }, carimbar: carimbar, htmlCom: htmlCom,
