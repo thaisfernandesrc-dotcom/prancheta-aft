@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="prancheta-codigo" content="2026-11-16T19:26:44Z">
+<meta name="prancheta-codigo" content="2026-11-16T19:42:29Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Prancheta de Inspeção</title>
 <style>
@@ -156,7 +156,6 @@ details.config summary{color:var(--suave);cursor:pointer}
 <div class="rodape">
   <div class="status" id="status">Carregando…</div>
   <button class="btn" type="button" id="btn-sincronizar" hidden>⇅ Sincronizar</button>
-  <button class="btn" type="button" id="btn-baixar" hidden>⬇ Baixar</button>
   <button class="btn cheio" type="button" id="btn-salvar">Salvar arquivo</button>
 </div>
 <dialog id="visor"><img id="visor-img" alt="Foto ampliada"><div class="corpo">
@@ -488,7 +487,7 @@ function mudou(it, campo) {
   alteradoDepoisDeSalvar = true;
   clearTimeout(tGravar);
   tGravar = setTimeout(gravarNoAparelho, 400);
-  if (arquivoHandle && arquivoPermitido && (PODE_GRAVAR_DIRETO || SINCRONIA_CELULAR)) { clearTimeout(tArquivo); tArquivo = setTimeout(function () { salvarNoArquivo(false); }, 2500); }
+  if (arquivoHandle && arquivoPermitido && PODE_GRAVAR_DIRETO) { clearTimeout(tArquivo); tArquivo = setTimeout(function () { salvarNoArquivo(false); }, 2500); }
   status();
 }
 function gravarNoAparelho() {
@@ -515,8 +514,8 @@ function status() {
   } else {
     if (guardaAparelho === "idb") p.push(gravadoEm ? "✓ Guardado neste celular às " + hhmm(gravadoEm) + "." :
       (alteradoDepoisDeSalvar ? "Guardando neste celular…" : "Pronta. O que marcar fica guardado neste celular."));
-    else if (guardaAparelho === "local") p.push("⚠ O celular só está guardando o texto. Salve o arquivo após cada foto.");
-    else p.push("⚠ Este celular não está guardando nada. Use Salvar arquivo com frequência.");
+    else if (guardaAparelho === "local") p.push("⚠ O celular só está guardando o texto. Toque em Sincronizar após cada foto.");
+    else p.push("⚠ Este celular não está guardando nada. Toque em Sincronizar com frequência.");
     p.push(alteradoDepoisDeSalvar ? "Arquivo ainda não salvo com as últimas mudanças." :
       (exportadoEm ? "Arquivo salvo às " + hhmm(exportadoEm) + "." : ""));
   }
@@ -1223,52 +1222,49 @@ document.getElementById("btn-salvar").addEventListener("click", function () {
   else escolherArquivo();
 });
 // Ao voltar para a janela no computador, relê o arquivo (o assistente pode ter gravado nele).
-window.addEventListener("focus", function () { if ((PODE_GRAVAR_DIRETO || SINCRONIA_CELULAR) && arquivoHandle && arquivoPermitido && !alteradoDepoisDeSalvar) salvarNoArquivo(false); });
+window.addEventListener("focus", function () { if (PODE_GRAVAR_DIRETO && arquivoHandle && arquivoPermitido && !alteradoDepoisDeSalvar) salvarNoArquivo(false); });
 
-// Sincronizar (TESTE no celular): lê o arquivo da pasta da OS no OneDrive, junta
-// com o celular (o mais novo de cada item) e grava de volta, num toque. É a
-// mesma gravação direta que o computador usa. Cada falha diz onde parou, para
-// a AFT contar ao assistente.
+// Sincronizar (celular, 16/11/2026): cada toque grava um arquivo NOVO, com o nome
+// PRANCHETADDMMAA-HHMM.html (ex.: PRANCHETA161126-1630.html), na pasta que a AFT
+// escolher (a pasta prancheta da OS). O nome nunca se repete, então o
+// Android/OneDrive não reclama de arquivo de mesmo nome; o assistente reconhece
+// o arquivo pelo conteúdo (OS e RI) e o junta ao da OS. Sem acesso a arquivo no
+// celular, o arquivo vai para Downloads com o mesmo nome.
+function nomeSincronia() {
+  var d = new Date();
+  return "PRANCHETA" + dois(d.getDate()) + dois(d.getMonth() + 1) + dois(d.getFullYear() % 100)
+    + "-" + dois(d.getHours()) + dois(d.getMinutes()) + ".html";
+}
+var ultimoDestino = null;   // só para o seletor abrir na mesma pasta da vez anterior
 function sincronizar() {
-  if (typeof window.showOpenFilePicker !== "function") {
-    toast("Teste: este celular NÃO permite sincronizar direto (sem acesso a arquivo). Use Exportar.", 7000); return; }
-  var escolher = arquivoHandle ? Promise.resolve(arquivoHandle) :
-    window.showOpenFilePicker({multiple: false, types: [{description: "Prancheta", accept: {"text/html": [".html", ".htm"]}}]})
-      .then(function (hs) { return hs[0]; });
-  var etapa = "escolher o arquivo";
-  escolher.then(function (hd) {
-    arquivoHandle = hd; etapa = "pedir permissão de gravação";
-    var p = hd.requestPermission ? hd.requestPermission({mode: "readwrite"}) : Promise.resolve("granted");
-    return p.then(function (st) {
-      arquivoPermitido = st === "granted";
-      if (!arquivoPermitido) { arquivoHandle = null;
-        toast("Teste: sem permissão para gravar nesse arquivo. Toque de novo em Sincronizar e permita.", 6000); return false; }
-      idbPut("arquivo|" + chave(), hd).catch(function () {});
-      etapa = "ler e gravar o arquivo";
-      return salvarNoArquivo(false);
+  var nome = nomeSincronia(), html = htmlCom(estado), etapa = "escolher onde salvar";
+  var concluir = function (onde) {
+    exportadoEm = new Date(); alteradoDepoisDeSalvar = false; status();
+    toast("✓ Salvo como " + nome + (onde ? " (" + onde + ")" : "") + " às " + hhmm(exportadoEm) + ".", 6000);
+  };
+  if (typeof window.showSaveFilePicker !== "function") {
+    baixar(new File([html], nome, {type: "text/html"}), function () { concluir("Downloads"); }); return; }
+  var opcoes = {suggestedName: nome, types: [{description: "Prancheta", accept: {"text/html": [".html"]}}]};
+  if (ultimoDestino) opcoes.startIn = ultimoDestino;
+  window.showSaveFilePicker(opcoes).catch(function (e) {
+    if (opcoes.startIn && e && e.name !== "AbortError") { delete opcoes.startIn; return window.showSaveFilePicker(opcoes); }
+    throw e;
+  }).then(function (h) {
+    ultimoDestino = h; etapa = "gravar o arquivo";
+    return h.createWritable().then(function (w) {
+      return w.write(html).then(function () { etapa = "fechar o arquivo"; return w.close(); });
     });
-  }).then(function (ok) {
-    if (ok) { exportadoEm = new Date(); alteradoDepoisDeSalvar = false; status();
-      toast("✓ Ligado ao arquivo da pasta da OS às " + hhmm(new Date()) + ". Daqui em diante cada mudança vai sozinha para o OneDrive.", 6000); }
-    else if (ok === false) arquivoHandle = arquivoPermitido ? arquivoHandle : null;
-  }).catch(function (e) {
+  }).then(function () { concluir(""); }).catch(function (e) {
     if (e && e.name === "AbortError") return;
-    arquivoHandle = null;
-    toast("Teste: parou ao " + etapa + " (" + (e && (e.name || e.message) || "erro") + "). Use Exportar e me conte esta mensagem.", 9000);
+    toast("Não consegui salvar (parou ao " + etapa + ": " + (e && (e.name || e.message) || "erro") + "). Toque de novo em Sincronizar.", 9000);
   });
 }
 if (SINCRONIA_CELULAR) {
+  // No celular o Sincronizar é o único botão de saída (pedido da AFT, 16/11/2026):
+  // o Salvar arquivo/Exportar e o Baixar saem da tela.
   document.getElementById("btn-sincronizar").hidden = false;
   document.getElementById("btn-sincronizar").addEventListener("click", sincronizar);
-  // Baixar (16/11/2026): grava o arquivo direto em Downloads, sem a tela de
-  // compartilhar do OneDrive (que ficou em branco no celular da AFT). Mesmo
-  // arquivo do Exportar, com data e hora no nome; quem o leva à pasta da OS é
-  // o assistente, ao receber o anexo.
-  document.getElementById("btn-baixar").hidden = false;
-  document.getElementById("btn-baixar").addEventListener("click", function () {
-    var arq = new File([htmlCom(estado)], nomeExportacao(), {type: "text/html"});
-    baixar(arq, function () { exportadoEm = new Date(); alteradoDepoisDeSalvar = false; status(); });
-  });
+  document.getElementById("btn-salvar").hidden = true;
 }
 
 // ------------------------------------------------------------ partida
@@ -1279,21 +1275,19 @@ idbGet(chave()).then(function (guardado) {
     if (!iguais(junto, estado)) {
       estado = junto;
       estado._aviso = "Juntei o arquivo com o que estava guardado neste aparelho (" + hhmm(new Date(ts(guardado.salvo_em) || Date.now())) + "). "
-        + (PODE_GRAVAR_DIRETO ? "Clique em Salvar arquivo para levar tudo à pasta da OS." : "Salve o arquivo para levar essas mudanças à pasta da OS.");
+        + (PODE_GRAVAR_DIRETO ? "Clique em Salvar arquivo para levar tudo à pasta da OS." : "Toque em Sincronizar para levar essas mudanças à pasta da OS.");
       alteradoDepoisDeSalvar = true;
     }
     gravadoEm = guardado.salvo_em ? new Date(ts(guardado.salvo_em)) : null;
   }
   guardaAparelho = "idb";
-  return (PODE_GRAVAR_DIRETO || SINCRONIA_CELULAR) ? idbGet("arquivo|" + chave()).then(function (h) {
+  return PODE_GRAVAR_DIRETO ? idbGet("arquivo|" + chave()).then(function (h) {
     if (h) { arquivoHandle = h; return h.queryPermission({mode: "readwrite"}).then(function (p) { arquivoPermitido = p === "granted"; }); }
   }).catch(function () {}) : null;
 }).catch(function () {
   try { localStorage.setItem("prancheta-teste", "1"); localStorage.removeItem("prancheta-teste"); guardaAparelho = "local"; }
   catch (e) { guardaAparelho = "nenhum"; }
 }).then(render).then(function () {
-  // Celular com o arquivo da pasta da OS já ligado e com permissão: junta o que o OneDrive tem.
-  if (SINCRONIA_CELULAR && arquivoHandle && arquivoPermitido) salvarNoArquivo(false);
 });
 
 // Acesso de conferência (usado nos testes da skill; não muda nada sozinho).

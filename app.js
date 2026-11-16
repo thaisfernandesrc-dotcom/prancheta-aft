@@ -11,7 +11,7 @@
 //  - "prancheta-aft": as marcações, que o arquivo da prancheta grava sozinho a
 //    cada toque (é o mesmo banco que ele usa aberto direto no navegador).
 // Nada vai a servidor nenhum.
-var VERSAO = "2026.11.16-1627";
+var VERSAO = "2026.11.16-1644";
 var MARCA = '<script id="dados-prancheta" type="application/json">';
 var MARCA_EM = '<script id="ementario-prancheta" type="application/json">';
 var FIM = "<\/script>";
@@ -207,8 +207,8 @@ function listar() {
       if (r.irr) partes.push(r.irr + " irregular(es)" + (r.semDesf ? ", " + r.semDesf + " sem desfecho" : ""));
       if (r.duv) partes.push(r.duv + " pendente(s) de confirmação");
       var pend = o.salvo_em && ts(o.salvo_em) > ts(o.exportado_em);
-      var sit = pend ? '<div class="sit pendente">⚠ Mudanças de ' + quando(o.salvo_em) + " ainda não exportadas para a pasta da OS.</div>"
-        : o.exportado_em ? '<div class="sit ok">✓ Exportada em ' + quando(o.exportado_em) + ".</div>" : "";
+      var sit = pend ? '<div class="sit pendente">⚠ Mudanças de ' + quando(o.salvo_em) + " ainda não sincronizadas com a pasta da OS.</div>"
+        : o.exportado_em ? '<div class="sit ok">✓ Sincronizada em ' + quando(o.exportado_em) + ".</div>" : "";
       return '<div class="os" data-k="' + esc(o.chave) + '"><div class="cab">OS ' + esc(o.os) + (o.ri ? " · RI " + esc(o.ri) : "") + "</div>"
         + (o.empresa ? '<div class="emp">' + esc(o.empresa) + "</div>" : "")
         + (partes.length ? '<div class="num">' + partes.join(" · ") + "</div>" : "")
@@ -231,10 +231,10 @@ function tirar(k) {
     if (!o) return;
     var pend = o.salvo_em && ts(o.salvo_em) > ts(o.exportado_em);
     var msg = "Remover a OS " + o.os + " deste celular?\n\n" + (pend
-      ? "ATENÇÃO: há mudanças que ainda NÃO foram exportadas. Elas se perdem. Exporte antes."
+      ? "ATENÇÃO: há mudanças que ainda NÃO foram sincronizadas. Elas se perdem. Toque em Sincronizar antes."
       : "Fotos e marcações saem do celular. O arquivo exportado na pasta da OS continua lá.");
     if (!confirm(msg)) return;
-    if (pend && !confirm("Tem certeza? As mudanças não exportadas da OS " + o.os + " vão se perder.")) return;
+    if (pend && !confirm("Tem certeza? As mudanças não sincronizadas da OS " + o.os + " vão se perder.")) return;
     return Promise.all([oss.tirar(k), arquivos.tirar(k), marcacoes.tirar(k)]).then(function () {
       toast("OS " + o.os + " removida do celular."); listar(); armazenamento(); });
   });
@@ -333,8 +333,8 @@ function atualizarResumo(k) {
 // falar em exportar. A troca é só na tela: o arquivo exportado sai igual ao de
 // sempre, com "Salvar arquivo" para quem o abrir no computador.
 var TROCAS = [
-  ["Arquivo ainda não salvo com as últimas mudanças.", "Últimas mudanças ainda não exportadas."],
-  ["Arquivo salvo às ", "Exportado às "],
+  ["Arquivo ainda não salvo com as últimas mudanças.", "Últimas mudanças ainda não sincronizadas."],
+  ["Arquivo salvo às ", "Sincronizado às "],
   ["Use Salvar arquivo com frequência.", "Use Exportar com frequência."],
   ["Salve o arquivo após cada foto.", "Exporte após cada foto."],
   ["Salve o arquivo para levar essas mudanças à pasta da OS.", "Toque em Exportar para levar essas mudanças à pasta da OS."],
@@ -354,7 +354,7 @@ function ajustarDentro(fr, k) {
   // depois de um toque no botão (no celular, quando o compartilhar termina).
   // No computador, que grava sozinho no arquivo, vale cada nova hora gravada.
   var exportando = false, ultimo = "";
-  if (btn) { btn.textContent = "Exportar"; btn.addEventListener("click", function () { exportando = true; }, true); }
+  if (btn) btn.hidden = true;   // no celular o Sincronizar é o único botão de saída
   var bs = doc.getElementById("btn-sincronizar");   // Sincronizar também leva à pasta da OS
   if (bs) bs.addEventListener("click", function () { exportando = true; }, true);
   if (st) {
@@ -408,7 +408,7 @@ function armazenamento() {
     }).catch(function () { el.textContent = ""; });
 }
 
-$("versao").textContent = "Versão " + VERSAO + " · os dados ficam neste aparelho e só saem pelo Exportar.";
+$("versao").textContent = "Versão " + VERSAO + " · os dados ficam neste aparelho e só saem pelo Sincronizar.";
 // Atualização (pedido da AFT, 14/10/2026: "não consegui atualizar o app"): a
 // versão nova entra sozinha. Quando o celular baixa a versão nova, a tela se
 // recarrega na hora, exceto com uma prancheta aberta (recarregar ali poderia
