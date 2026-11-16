@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="prancheta-codigo" content="2026-11-05T10:29:24Z">
+<meta name="prancheta-codigo" content="2026-11-16T19:26:44Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Prancheta de Inspeção</title>
 <style>
@@ -156,6 +156,7 @@ details.config summary{color:var(--suave);cursor:pointer}
 <div class="rodape">
   <div class="status" id="status">Carregando…</div>
   <button class="btn" type="button" id="btn-sincronizar" hidden>⇅ Sincronizar</button>
+  <button class="btn" type="button" id="btn-baixar" hidden>⬇ Baixar</button>
   <button class="btn cheio" type="button" id="btn-salvar">Salvar arquivo</button>
 </div>
 <dialog id="visor"><img id="visor-img" alt="Foto ampliada"><div class="corpo">
@@ -1259,6 +1260,15 @@ function sincronizar() {
 if (SINCRONIA_CELULAR) {
   document.getElementById("btn-sincronizar").hidden = false;
   document.getElementById("btn-sincronizar").addEventListener("click", sincronizar);
+  // Baixar (16/11/2026): grava o arquivo direto em Downloads, sem a tela de
+  // compartilhar do OneDrive (que ficou em branco no celular da AFT). Mesmo
+  // arquivo do Exportar, com data e hora no nome; quem o leva à pasta da OS é
+  // o assistente, ao receber o anexo.
+  document.getElementById("btn-baixar").hidden = false;
+  document.getElementById("btn-baixar").addEventListener("click", function () {
+    var arq = new File([htmlCom(estado)], nomeExportacao(), {type: "text/html"});
+    baixar(arq, function () { exportadoEm = new Date(); alteradoDepoisDeSalvar = false; status(); });
+  });
 }
 
 // ------------------------------------------------------------ partida
