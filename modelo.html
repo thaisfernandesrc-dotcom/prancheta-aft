@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="prancheta-codigo" content="2026-11-17T01:37:45Z">
+<meta name="prancheta-codigo" content="2026-11-17T02:17:54Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Prancheta de Inspeção</title>
 <style>
@@ -218,11 +218,15 @@ var alteradoDepoisDeSalvar = false;
 // por isso só o computador grava direto no arquivo da pasta da OS.
 var EH_CELULAR = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")
   || !!(navigator.userAgentData && navigator.userAgentData.mobile);
-var PODE_GRAVAR_DIRETO = typeof window.showSaveFilePicker === "function" && !EH_CELULAR;
+// Modo NAVEGADOR (16/11/2026): a página foi aberta pelo endereço do computador da AFT
+// (https://<computador>.ts.net:8443/os/<pasta>, pela Tailscale). Cada mudança é salva
+// SOZINHA no arquivo da pasta da OS, pelo serviço do computador (prancheta_servidor.py).
+var MODO_SERVIDOR = /\.ts\.net$/i.test(location.hostname) && /^\/os\//.test(location.pathname);
+var PODE_GRAVAR_DIRETO = typeof window.showSaveFilePicker === "function" && !EH_CELULAR && !MODO_SERVIDOR;
 // Sincronizar (pedido da AFT, 14/10/2026; salvamento automático em 05/11/2026):
 // no celular, um toque no botão liga a prancheta ao arquivo da pasta da OS no
 // OneDrive; a partir daí cada mudança é gravada nele sozinha (como no computador).
-var SINCRONIA_CELULAR = EH_CELULAR;
+var SINCRONIA_CELULAR = EH_CELULAR && !MODO_SERVIDOR;
 
 function normalizar(s) {
   s.itens = s.itens || []; s.observacoes = s.observacoes || ""; s.carimbo = s.carimbo || {};
@@ -488,6 +492,7 @@ function mudou(it, campo) {
   clearTimeout(tGravar);
   tGravar = setTimeout(gravarNoAparelho, 400);
   if (arquivoHandle && arquivoPermitido && PODE_GRAVAR_DIRETO) { clearTimeout(tArquivo); tArquivo = setTimeout(function () { salvarNoArquivo(false); }, 2500); }
+  if (MODO_SERVIDOR) { clearTimeout(tServ); tServ = setTimeout(function () { enviarAoServidor(false); }, 2000); }
   status();
 }
 function gravarNoAparelho() {
@@ -504,6 +509,13 @@ function gravarNoAparelho() {
 }
 function status() {
   var el = document.getElementById("status"), p = [];
+  if (MODO_SERVIDOR) {
+    p.push(servidorErro ? "⚠ Sem conexão com o computador. O que você marcar fica guardado neste aparelho e vai assim que a conexão voltar."
+      : alteradoDepoisDeSalvar ? "Salvando no computador…"
+      : salvoServidorEm ? "✓ Salvo no computador às " + hhmm(salvoServidorEm) + "."
+      : "Pronta. O que você marcar é salvo sozinho no computador.");
+    el.textContent = p.join(" "); return;
+  }
   if (PODE_GRAVAR_DIRETO) {
     if (arquivoHandle && arquivoPermitido)
       p.push(alteradoDepoisDeSalvar ? "Salvando no arquivo da pasta da OS…" :
@@ -1236,7 +1248,22 @@ function nomeSincronia() {
     + "-" + dois(d.getHours()) + dois(d.getMinutes()) + ".html";
 }
 var ultimoDestino = null;   // só para o seletor abrir na mesma pasta da vez anterior
+// Sincronizar no celular (16/11/2026): abre o COMPARTILHAR do Android com o arquivo
+// PRANCHETADDMMAA-HHMM.html (a AFT escolhe o OneDrive e a pasta prancheta da OS). Se o
+// aparelho não puder compartilhar arquivo, cai no "salvar como".
 function sincronizar() {
+  var nome = nomeSincronia(), arqCompartilhar = new File([htmlCom(estado)], nome, {type: "text/html"}), pode = false;
+  try { pode = !!(navigator.canShare && navigator.share && navigator.canShare({files: [arqCompartilhar]})); } catch (e) {}
+  if (!pode) { sincronizarPeloSeletor(); return; }
+  navigator.share({files: [arqCompartilhar], title: nome}).then(function () {
+    exportadoEm = new Date(); alteradoDepoisDeSalvar = false; status();
+    toast("✓ Enviado como " + nome + " às " + hhmm(exportadoEm) + ".", 6000);
+  }).catch(function (e) {
+    if (e && e.name === "AbortError") return;
+    sincronizarPeloSeletor();
+  });
+}
+function sincronizarPeloSeletor() {
   var nome = nomeSincronia(), html = htmlCom(estado), etapa = "escolher onde salvar";
   var concluir = function (onde) {
     exportadoEm = new Date(); alteradoDepoisDeSalvar = false; status();
@@ -1267,6 +1294,56 @@ if (SINCRONIA_CELULAR) {
   document.getElementById("btn-salvar").hidden = true;
 }
 
+// Modo NAVEGADOR: envia o estado ao computador (POST /salvar/<pasta>), que junta com o
+// arquivo da OS (o mais novo de cada item) e grava. A resposta traz o que o computador
+// tem a mais (ex.: enquadramento feito pelo assistente), que entra na tela.
+var tServ = null, salvoServidorEm = null, servidorErro = false, enviando = false, reenviar = false;
+function enviarAoServidor(avisar) {
+  if (!MODO_SERVIDOR) return Promise.resolve(false);
+  if (enviando) { reenviar = true; return Promise.resolve(false); }
+  enviando = true;
+  var alvo = location.pathname.replace(/^\/os\//, "/salvar/"), enviado = estado.salvo_em;
+  return fetch(alvo, {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(semInternos(estado)), cache: "no-store"})
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(function (resp) {
+      servidorErro = false; salvoServidorEm = new Date();
+      if (resp && resp.itens) {
+        var junto = mesclar(estado, normalizar(resp));
+        if (!iguais(junto, estado)) {
+          var abertos = {}; estado.itens.forEach(function (i) { if (i._aberto) abertos[i.id] = 1; });
+          junto.itens.forEach(function (i) { if (abertos[i.id]) i._aberto = true; });
+          estado = junto;
+          if (!document.activeElement || document.activeElement.tagName === "BODY") render();
+        }
+      }
+      if (estado.salvo_em === enviado) alteradoDepoisDeSalvar = false;
+      gravarNoAparelho();
+      if (avisar) toast("✓ Salvo no computador às " + hhmm(salvoServidorEm) + ".", 4000);
+      return true;
+    })
+    .catch(function (e) {
+      servidorErro = true;
+      if (avisar) toast("Não consegui falar com o computador (" + (e && (e.message || e.name) || "erro")
+        + "). Ele está ligado e com a Tailscale ativa? O que você marcou continua guardado neste aparelho.", 9000);
+      clearTimeout(tServ); tServ = setTimeout(function () { enviarAoServidor(false); }, 15000);
+      return false;
+    })
+    .then(function (ok) {
+      enviando = false; status();
+      if (reenviar) { reenviar = false; enviarAoServidor(false); }
+      return ok;
+    });
+}
+if (MODO_SERVIDOR) {
+  // Sincronizar = salvar agora e trazer o que o computador tem; o resto é automático.
+  document.getElementById("btn-sincronizar").hidden = false;
+  document.getElementById("btn-sincronizar").addEventListener("click", function () { enviarAoServidor(true); });
+  document.getElementById("btn-salvar").hidden = true;
+  window.addEventListener("online", function () { enviarAoServidor(false); });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) enviarAoServidor(false); });
+}
+
 // ------------------------------------------------------------ partida
 // Junta o que está no arquivo com o que estava guardado neste aparelho.
 idbGet(chave()).then(function (guardado) {
@@ -1288,6 +1365,7 @@ idbGet(chave()).then(function (guardado) {
   try { localStorage.setItem("prancheta-teste", "1"); localStorage.removeItem("prancheta-teste"); guardaAparelho = "local"; }
   catch (e) { guardaAparelho = "nenhum"; }
 }).then(render).then(function () {
+  if (MODO_SERVIDOR) enviarAoServidor(false);
 });
 
 // Acesso de conferência (usado nos testes da skill; não muda nada sozinho).
