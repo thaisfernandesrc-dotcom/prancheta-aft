@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="prancheta-codigo" content="2026-11-16T23:43:02Z">
+<meta name="prancheta-codigo" content="2026-11-17T01:34:33Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Prancheta de Inspeção</title>
 <style>
@@ -1185,8 +1185,7 @@ function salvarNoArquivo(comClique) {
       toast("O celular não encontra mais aquele arquivo (o OneDrive o trocou de lugar). Toque em Sincronizar e escolha de novo o arquivo da pasta da OS.", 10000);
       return false;
     }
-    var det = e ? ((e.name || "erro") + (e.message ? ": " + String(e.message).slice(0, 140) : "")) : "erro";
-    toast("Não consegui gravar no arquivo (" + det + "). Tente de novo.", 14000); return false; });
+    toast("Não consegui gravar no arquivo (" + (e && (e.name || e.message) || "erro") + "). Tente de novo.", 6000); return false; });
 }
 function escolherArquivo() {
   return window.showSaveFilePicker({suggestedName: nomeArquivo(),
@@ -1250,13 +1249,7 @@ function sincronizar() {
   }).then(function (ok) {
     if (ok) { exportadoEm = new Date(); alteradoDepoisDeSalvar = false; status();
       toast("✓ Ligado ao arquivo da pasta da OS às " + hhmm(new Date()) + ". Daqui em diante cada mudança vai sozinha para o OneDrive.", 6000); }
-    else if (ok === false) {
-      if (arquivoPermitido) {   // a escolha e a permissão deram certo, a gravação não: guarda uma cópia em Downloads
-        baixar(new File([htmlCom(estado)], nomeExportacao(), {type: "text/html"}), function () {
-          exportadoEm = new Date(); alteradoDepoisDeSalvar = false; status(); });
-      }
-      arquivoHandle = arquivoPermitido ? arquivoHandle : null;
-    }
+    else if (ok === false) arquivoHandle = arquivoPermitido ? arquivoHandle : null;
   }).catch(function (e) {
     if (e && e.name === "AbortError") return;
     arquivoHandle = null;
